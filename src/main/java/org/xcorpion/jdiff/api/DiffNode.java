@@ -9,6 +9,7 @@ public class DiffNode {
     protected Map<Object, DiffNode> fieldDiffs;
 
     public DiffNode() {
+        diff = new Diff();
     }
 
     public DiffNode(Diff diff) {
@@ -22,6 +23,17 @@ public class DiffNode {
 
     public Diff getDiff() {
         return diff;
+    }
+
+    public boolean isEmpty() {
+        if (diff != null && diff.getOperation() != null &&
+                diff.getOperation() != Diff.Operation.NO_OP) {
+            return false;
+        }
+        if (fieldDiffs != null && !fieldDiffs.isEmpty()) {
+            return false;
+        }
+        return true;
     }
 
     public Map<Object, DiffNode> getFieldDiffs() {

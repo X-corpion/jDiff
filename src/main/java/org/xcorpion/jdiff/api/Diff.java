@@ -12,11 +12,11 @@ public class Diff {
 
     }
 
-    protected Operation operation;
+    protected Operation operation = Operation.NO_OP;
     protected Object srcValue;
     protected Object targetValue;
 
-    private Diff() {
+    Diff() {
     }
 
     public Diff(Operation operation, Object srcValue, Object targetValue) {
