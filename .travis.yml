@@ -1,8 +1,5 @@
 sudo: false
 language: java
-cache:
-    directories:
-        - ".cache"
 
 script:
   - mvn test jacoco:report
