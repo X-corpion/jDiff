@@ -13,9 +13,17 @@ public class ReflectionUtilsTest {
 
     private static class ObjectWithCollection {
 
-        List<String> list = new ArrayList<String>();
-        Map<String, String> map = new HashMap<String, String>();
+        List<String> list = new ArrayList<>();
+        Map<String, String> map = new HashMap<>();
 
+    }
+
+    private static class CloneableObjectWithCollection extends ObjectWithCollection implements Cloneable {
+
+        @Override
+        protected Object clone() throws CloneNotSupportedException {
+            return super.clone();
+        }
     }
 
     private static class ObjectWithImmutableCollection {
@@ -26,19 +34,19 @@ public class ReflectionUtilsTest {
 
     private static class NestedObject {
 
-        public NestedObject nested;
-        public int level;
+        NestedObject nested;
+        int level;
 
     }
 
     private static class MultipleEntryObject {
 
-        public NestedObject nested = new NestedObject();
+        NestedObject nested = new NestedObject();
         {
             nested.level = 10;
         }
-        public Object nullObject;
-        public int intPrimitive = 1;
+        Object nullObject;
+        int intPrimitive = 1;
 
     }
 
@@ -48,15 +56,17 @@ public class ReflectionUtilsTest {
         obj.list.add("123");
         obj.map.put("456", "789");
         ObjectWithCollection cloned = ReflectionUtils.deepClone(obj);
+        assertNotNull(cloned);
         assertThat(cloned.list, is(Collections.singletonList("123")));
     }
 
     @Test
     public void deepCloneShouldHandleImmutableCollections() {
         ObjectWithImmutableCollection obj = new ObjectWithImmutableCollection();
-        obj.set = Collections.unmodifiableSet(new HashSet<String>(Arrays.asList("123", "456")));
+        obj.set = Collections.unmodifiableSet(new HashSet<>(Arrays.asList("123", "456")));
         ObjectWithImmutableCollection cloned = ReflectionUtils.deepClone(obj);
-        Set<String> expected = new HashSet<String>(Arrays.asList("123", "456"));
+        Set<String> expected = new HashSet<>(Arrays.asList("123", "456"));
+        assertNotNull(cloned);
         assertThat(cloned.set, is(expected));
         assertThat(cloned.set.getClass().getCanonicalName(), is("java.util.Collections.UnmodifiableSet"));
     }
@@ -70,6 +80,7 @@ public class ReflectionUtilsTest {
         src.intPrimitive = 123;
         src.nullObject = "not null";
 
+        assertNotNull(cloned);
         assertThat(cloned.nested.level, is(10));
         assertThat(cloned.intPrimitive, is(1));
         assertThat(cloned.nullObject, is(nullValue()));
@@ -86,11 +97,38 @@ public class ReflectionUtilsTest {
             current = current.nested;
         }
         NestedObject cloned = ReflectionUtils.deepClone(root);
+        assertNotNull(cloned);
         for (int i = 0; i < 5000; i++) {
             assertNotNull(cloned.nested);
             assertThat(cloned.nested.level, is(i + 1));
             cloned = cloned.nested;
         }
+    }
+
+    @Test
+    public void shallowCloneCloneableShouldNotCloneNestedObjects() {
+        CloneableObjectWithCollection obj = new CloneableObjectWithCollection();
+        obj.list = Arrays.asList("1", "2");
+        obj.map = new HashMap<>();
+        obj.map.put("1", "2");
+        CloneableObjectWithCollection cloned = ReflectionUtils.shallowClone(obj);
+        assertNotNull(cloned);
+        assertThat(cloned == obj, is(false));
+        assertThat(cloned.list == obj.list, is(true));
+        assertThat(cloned.map == obj.map, is(true));
+    }
+
+    @Test
+    public void shallowCloneRegularClassShouldNotCloneNestedObjects() {
+        ObjectWithCollection obj = new ObjectWithCollection();
+        obj.list = Arrays.asList("1", "2");
+        obj.map = new HashMap<>();
+        obj.map.put("1", "2");
+        ObjectWithCollection cloned = ReflectionUtils.shallowClone(obj);
+        assertNotNull(cloned);
+        assertThat(cloned == obj, is(false));
+        assertThat(cloned.list == obj.list, is(true));
+        assertThat(cloned.map == obj.map, is(true));
     }
 
 }

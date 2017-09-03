@@ -10,6 +10,7 @@ import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -31,6 +32,7 @@ public class ReflectionUtils {
     }
 
     @SuppressWarnings("unchecked")
+    @Nullable
     public static <T> T deepClone(@Nullable T srcObject) throws CloneException {
         if (srcObject == null) {
             return null;
@@ -71,6 +73,45 @@ public class ReflectionUtils {
             } catch (IllegalAccessException e) {
                 throw new CloneException("Failed to set field " + f.getName() + " in " +
                         getClassName(targetObject), e);
+            }
+        }
+        return targetObject;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Nullable
+    public static <T> T shallowClone(@Nullable T srcObject) throws CloneException {
+        if (srcObject == null) {
+            return null;
+        }
+        if (srcObject.getClass().isPrimitive()) {
+            // for primitives, cloning is unnecessary
+            return srcObject;
+        }
+        if (srcObject instanceof Cloneable) {
+            try {
+                @SuppressWarnings("JavaReflectionMemberAccess")
+                Method cloneMethod = getMethod(srcObject, "clone");
+                if (cloneMethod == null) {
+                    throw new CloneException("Failed to clone Cloneable: clone method is not found");
+                }
+                cloneMethod.setAccessible(true);
+                return (T) cloneMethod.invoke(srcObject);
+            }
+            catch (IllegalAccessException | InvocationTargetException e) {
+                throw new CloneException("Failed to clone Cloneable: failed to invoke clone method", e);
+            }
+        }
+
+        T targetObject = generateEmptyCopy(srcObject);
+        List<Field> fields = getAllFieldsRecursive(srcObject.getClass());
+        for (Field field : fields) {
+            field.setAccessible(true);
+            try {
+                field.set(targetObject, field.get(srcObject));
+            }
+            catch (IllegalAccessException e) {
+                throw new CloneException("Failed to assign value to field " + field.getName(), e);
             }
         }
         return targetObject;
@@ -157,21 +198,32 @@ public class ReflectionUtils {
         return fields;
     }
 
+    @Nullable
     public static Field getField(@Nonnull Object obj, @Nonnull String name) {
         Class<?> clz = obj.getClass();
         while (clz != null) {
             Field[] fields = obj.getClass().getDeclaredFields();
-            Field field = null;
-            for (Field f : fields) {
-                if (f.getName().equals(name)) {
-                    field = f;
+            for (Field field : fields) {
+                if (field.getName().equals(name)) {
+                    return field;
                 }
             }
-            if (field == null) {
-                clz = clz.getSuperclass();
-                continue;
+            clz = clz.getSuperclass();
+        }
+        return null;
+    }
+
+    @Nullable
+    public static Method getMethod(@Nonnull Object obj, @Nonnull String name) {
+        Class<?> clz = obj.getClass();
+        while (clz != null) {
+            Method[] methods = obj.getClass().getDeclaredMethods();
+            for (Method method : methods) {
+                if (method.getName().equals(name)) {
+                    return method;
+                }
             }
-            return field;
+            clz = clz.getSuperclass();
         }
         return null;
     }
