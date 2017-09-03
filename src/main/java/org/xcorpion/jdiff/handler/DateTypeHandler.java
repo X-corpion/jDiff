@@ -16,7 +16,7 @@ public class DateTypeHandler implements TypeHandler<Date> {
 
     @Nullable
     @Override
-    public Date merge(@Nullable Date parent, @Nonnull MergeContext mergeContext) {
+    public Date merge(@Nullable Date parent, @Nonnull MergingContext mergingContext) {
         return null;
     }
 

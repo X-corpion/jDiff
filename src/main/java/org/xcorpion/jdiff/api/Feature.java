@@ -22,4 +22,22 @@ public interface Feature {
         }
     }
 
+    enum MergingValidationCheck implements Feature {
+        VALIDATE_SOURCE_VALUE
+        ;
+
+        @Override
+        public boolean allowMultiple() {
+            return true;
+        }
+    }
+
+    enum MergingStrategy implements Feature {
+
+        CLONE_SOURCE_ROOT,
+        CLONE_SOURCE_FULL_OBJECT,
+        CLONE_SOURCE_COLLECTIONS_ONLY,
+
+    }
+
 }

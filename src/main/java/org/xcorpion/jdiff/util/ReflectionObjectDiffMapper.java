@@ -2,6 +2,8 @@ package org.xcorpion.jdiff.util;
 
 import org.xcorpion.jdiff.api.*;
 import org.xcorpion.jdiff.exception.DiffException;
+import org.xcorpion.jdiff.exception.MergingException;
+import org.xcorpion.jdiff.internal.model.DefaultMergingContext;
 import org.xcorpion.jdiff.util.collection.DiffApplicationTree;
 import org.xcorpion.jdiff.util.collection.Iterables;
 import org.xcorpion.jdiff.util.collection.Tree;
@@ -332,20 +334,33 @@ public class ReflectionObjectDiffMapper
     }
 
     @Override
-    @Nullable
-    public <T> T applyDiff(@Nullable T src, @Nonnull DiffNode diffs) {
-        T srcCopy = ReflectionUtils.deepClone(src);
-        return applyDiffInPlace(srcCopy, diffs);
+    public <T> T applyDiff(@Nullable T src, @Nonnull DiffNode diffs, @Nonnull Set<Feature.MergingStrategy> mergingStrategies) {
+        DiffApplicationTree diffApplicationTree = new DiffApplicationTree(src, diffs);
+        try {
+            Iterable<DiffApplicationTree> applicationTreeNodes = diffApplicationTree.preOrderTraversal();
+            Iterator<DiffApplicationTree> iter = applicationTreeNodes.iterator();
+            @SuppressWarnings("unchecked")
+            T newRoot = (T) iter.next().applyDiff(new DefaultMergingContext(
+                    this,
+                    mergingStrategies,
+                    true
+            ));
+            while (iter.hasNext()) {
+                DiffApplicationTree node = iter.next();
+                node.applyDiff(new DefaultMergingContext(
+                        this,
+                        mergingStrategies,
+                        false
+                ));
+            }
+            return newRoot;
+        }
+        catch (Throwable e) {
+            if (e instanceof MergingException) {
+                throw e;
+            }
+            throw new MergingException("Failed to merge diff: " + e.getMessage(), e);
+        }
     }
 
-    @Override
-    @Nullable
-    public <T> T applyDiffInPlace(@Nullable T src, @Nonnull DiffNode diffs) {
-        DiffApplicationTree diffApplicationTree = new DiffApplicationTree(src, diffs);
-        Iterable<DiffApplicationTree> nodeIterable = diffApplicationTree.postOrderTraversal();
-        for (DiffApplicationTree aNodeIterable : nodeIterable) {
-            //
-        }
-        return src;
-    }
 }

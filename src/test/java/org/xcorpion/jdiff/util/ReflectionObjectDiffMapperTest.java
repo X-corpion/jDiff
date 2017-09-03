@@ -3,9 +3,11 @@ package org.xcorpion.jdiff.util;
 import org.junit.Before;
 import org.junit.Test;
 import org.xcorpion.jdiff.api.*;
+import org.xcorpion.jdiff.exception.MergingException;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.io.Serializable;
 import java.util.*;
 
 import static org.hamcrest.Matchers.*;
@@ -16,7 +18,7 @@ public class ReflectionObjectDiffMapperTest {
 
     private ReflectionObjectDiffMapper diffMapper;
 
-    private static class TestClass {
+    private static class TestClass implements Serializable {
 
         Object field1;
         Object field2;
@@ -541,6 +543,145 @@ public class ReflectionObjectDiffMapperTest {
             assertThat(field2Diff.getDiff().getTargetValue(), is(i + 1));
             diffNode = fieldDiffs.get("field1");
         }
+    }
+
+    @Test
+    public void applyDiffFromNullToPrimitive() {
+        DiffNode diff = diffMapper.diff(null, 100);
+        int result = diffMapper.applyDiff(null, diff);
+        assertThat(result, is(100));
+    }
+
+    @Test
+    public void applyPrimitiveDiffFromOneValueToAnother() {
+        DiffNode diff = diffMapper.diff(1, 100);
+        int result = diffMapper.applyDiff(1, diff);
+        assertThat(result, is(100));
+    }
+
+    @Test(expected = MergingException.class)
+    public void applyPrimitiveDiffToAWrongSrcShouldThrowException() {
+        DiffNode diff = diffMapper.diff(1, 100);
+        diffMapper.applyDiff(true, diff);
+    }
+
+    @Test
+    public void applyPrimitiveDiffToAnUnequalButCompatibleSourceShouldNotThrowException() {
+        DiffNode diff = diffMapper.diff(1, 100);
+        Object result = diffMapper.applyDiff(new Object(), diff);
+        assertThat(result, is(100));
+    }
+
+    @Test
+    public void applyArrayDiffWithElementsRemoved() {
+        int[] src = new int[]{1, 2, 3};
+        DiffNode diff = diffMapper.diff(src, new int[]{1});
+        int[] result = diffMapper.applyDiff(src, diff);
+        assertThat(result.length, is(1));
+        assertThat(result[0], is(1));
+    }
+
+    @Test
+    public void applyArrayDiffWithElementsAdded() {
+        int[] src = new int[]{1};
+        DiffNode diff = diffMapper.diff(src, new int[]{1, 2, 3});
+        int[] result = diffMapper.applyDiff(src, diff);
+        assertThat(result.length, is(3));
+        assertThat(result[0], is(1));
+        assertThat(result[1], is(2));
+        assertThat(result[2], is(3));
+    }
+
+    @Test
+    public void applyObjectDiff() {
+        TestClass src = new TestClass("1", 2);
+        TestClass target = new TestClass("2", 3);
+        DiffNode diff = diffMapper.diff(src, target);
+        TestClass result = diffMapper.applyDiff(src, diff);
+
+        assertThat(src == result, is(true));
+        assertThat(result.field1, is("2"));
+        assertThat(result.field2, is(3));
+    }
+
+    @Test
+    public void applyObjectDiffOntoNewObject() {
+        TestClass src = new TestClass("1", 2);
+        TestClass target = new TestClass("2", 3);
+        DiffNode diff = diffMapper.diff(src, target);
+        TestClass result = diffMapper.applyDiff(src, diff, Collections.singleton(Feature.MergingStrategy.CLONE_SOURCE_ROOT));
+
+        assertThat(result == src, is(false));
+        assertThat(result.field1, is("2"));
+        assertThat(result.field2, is(3));
+
+        assertThat(src.field1, is("1"));
+        assertThat(src.field2, is(2));
+    }
+
+    @Test
+    public void applyArrayDiffWithValueUpdateOnly() {
+        DiffNode diff = diffMapper.diff(new int[] {1, 2}, new int[] {2, 2});
+        int[] result = diffMapper.applyDiff(new int[]{1, 2}, diff);
+        assertThat(result.length, is(2));
+        assertThat(result[0], is(2));
+        assertThat(result[1], is(2));
+    }
+
+    @Test
+    public void applySetDiff() {
+        Set<String> src = new HashSet<>();
+        src.add("a");
+        src.add("b");
+
+        Set<String> target = new HashSet<>();
+        target.add("a");
+        target.add("c");
+
+        DiffNode diff = diffMapper.diff(src, target);
+        Set<String> result = diffMapper.applyDiff(src, diff, Collections.singleton(Feature.MergingStrategy.CLONE_SOURCE_ROOT));
+        assertThat(src != target, is(true));
+        assertThat(result.size(), is(2));
+        assertThat(result, containsInAnyOrder("a", "c"));
+        assertThat(result, not(contains("b")));
+    }
+
+    @Test
+    public void applyMapDiffWithSimpleKey() {
+        Map<String, Integer> src = new HashMap<>();
+        src.put("a", 1);
+        src.put("b", 2);
+
+        Map<String, Integer> target = new HashMap<>();
+        target.put("a", 2);
+        target.put("c", 2);
+
+        DiffNode diff = diffMapper.diff(src, target);
+        Map<String, Integer> result = diffMapper.applyDiff(src, diff, Collections.singleton(Feature.MergingStrategy.CLONE_SOURCE_ROOT));
+        assertThat(src != target, is(true));
+        assertThat(result.size(), is(2));
+        assertThat(result, hasEntry("a", 2));
+        assertThat(result, not(hasKey("b")));
+        assertThat(result, hasEntry("c", 2));
+    }
+
+    @Test
+    public void applyMapDiffWithObjectKey() {
+        Map<TestClass, Integer> src = new HashMap<>();
+        src.put(new TestClass(1, "a"), 1);
+        src.put(new TestClass(2, "b"), 2);
+
+        Map<TestClass, Integer> target = new HashMap<>();
+        target.put(new TestClass(1, "a"), 2);
+        target.put(new TestClass(2, "c"), 1);
+
+        DiffNode diff = diffMapper.diff(src, target);
+        Map<TestClass, Integer> result = diffMapper.applyDiff(src, diff, Collections.singleton(Feature.MergingStrategy.CLONE_SOURCE_ROOT));
+        assertThat(src != target, is(true));
+        assertThat(result.size(), is(2));
+        assertThat(result, hasEntry(new TestClass(1, "a"), 2));
+        assertThat(result, not(hasKey(new TestClass(2, "b"))));
+        assertThat(result, hasEntry(new TestClass(2, "c"), 1));
     }
 
 }

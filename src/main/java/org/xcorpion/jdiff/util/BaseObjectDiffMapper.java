@@ -49,6 +49,11 @@ public abstract class BaseObjectDiffMapper implements ObjectDiffMapper {
     }
 
     @Override
+    public <T> T applyDiff(@Nullable T src, @Nonnull DiffNode diffs) {
+        return applyDiff(src, diffs, Collections.emptySet());
+    }
+
+    @Override
     public <T> TypeHandler<T> getTypeHandler(@Nonnull Class<T> cls) {
         return (TypeHandler<T>) typeHandlers.get(cls);
     }
@@ -145,5 +150,18 @@ public abstract class BaseObjectDiffMapper implements ObjectDiffMapper {
     protected DiffNode createPrimitiveUpdateDiffGroup(@Nullable Object src, @Nullable Object target) {
         Diff diff = new Diff(Diff.Operation.UPDATE_VALUE, src, target);
         return new DiffNode(diff);
+    }
+
+    @Override
+    public boolean isMergingStrategyEnabled(
+            @Nonnull Feature.MergingStrategy strategy,
+            @Nullable Set<Feature.MergingStrategy> oneOffStrategies
+    ) {
+        if (oneOffStrategies != null) {
+            if (oneOffStrategies.contains(strategy)) {
+                return true;
+            }
+        }
+        return isEnabled(strategy);
     }
 }

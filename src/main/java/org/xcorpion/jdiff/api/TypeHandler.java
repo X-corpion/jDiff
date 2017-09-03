@@ -26,7 +26,7 @@ public interface TypeHandler<T> {
     }
 
     @Nullable
-    default T merge(@Nullable T parent, @Nonnull MergeContext mergeContext) {
+    default T merge(@Nullable T parent, @Nonnull MergingContext mergingContext) {
         throw new UnsupportedOperationException();
     }
 

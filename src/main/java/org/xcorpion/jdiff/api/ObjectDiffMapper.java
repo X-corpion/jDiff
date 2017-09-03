@@ -1,5 +1,6 @@
 package org.xcorpion.jdiff.api;
 
+import java.util.Set;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
@@ -10,7 +11,7 @@ public interface ObjectDiffMapper {
 
     <T> T applyDiff(@Nullable T src, @Nonnull DiffNode diffs);
 
-    <T> T applyDiffInPlace(@Nullable T src, @Nonnull DiffNode diffs);
+    <T> T applyDiff(@Nullable T src, @Nonnull DiffNode diffs, @Nonnull Set<Feature.MergingStrategy> mergingStrategies);
 
     <T> TypeHandler<T> getTypeHandler(@Nonnull Class<T> cls);
 
@@ -21,5 +22,10 @@ public interface ObjectDiffMapper {
     ObjectDiffMapper disable(@Nonnull Feature feature);
 
     boolean isEnabled(@Nonnull Feature feature);
+
+    boolean isMergingStrategyEnabled(
+            @Nonnull Feature.MergingStrategy strategy,
+            @Nullable Set<Feature.MergingStrategy> oneOffStrategies
+    );
 
 }

@@ -1,13 +1,14 @@
 package org.xcorpion.jdiff.util.reflection;
 
 import org.apache.commons.lang3.SerializationUtils;
+import org.objenesis.Objenesis;
+import org.objenesis.ObjenesisStd;
 import org.xcorpion.jdiff.exception.CloneException;
 import org.xcorpion.jdiff.util.collection.Tree;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.Serializable;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -17,6 +18,8 @@ import java.util.Iterator;
 import java.util.List;
 
 public class ReflectionUtils {
+
+    private static final Objenesis OBJENESIS = new ObjenesisStd();
 
     private static class FieldCloneMeta {
 
@@ -164,19 +167,11 @@ public class ReflectionUtils {
     @SuppressWarnings("unchecked")
     private static <T> T generateEmptyCopy(T instance) {
         try {
-            Constructor<T> defaultCtor = (Constructor<T>) instance.getClass().getDeclaredConstructor();
-            defaultCtor.setAccessible(true);
-            return defaultCtor.newInstance();
-        } catch (NoSuchMethodException e) {
-            throw new CloneException(
-                    "Failed to clone " + getClassName(instance) +
-                            ": it should either extend Serializable or have a default constructor", e);
-        } catch (IllegalAccessException e) {
-            throw new CloneException("Failed to invoke default constructor on " + getClassName(instance), e);
-        } catch (InstantiationException e) {
-            throw new CloneException("Failed to create an empty object of " + getClassName(instance), e);
-        } catch (InvocationTargetException e) {
-            throw new CloneException(e);
+            return OBJENESIS.newInstance((Class<T>) instance.getClass());
+        }
+        catch (Throwable e) {
+            throw new CloneException("Failed to clone " + getClassName(instance) +
+                    ": failed to create a new empty object", e);
         }
     }
 
