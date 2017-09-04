@@ -18,4 +18,13 @@ public interface ListTestCases {
 
     @Test
     void diffALargerListWithASmallerOne();
+
+    @Test
+    void applyDiffToPrimitiveList();
+
+    @Test
+    void applyDiffToCustomObjectList();
+
+    @Test
+    void applyDiffToNestedCollectionList();
 }

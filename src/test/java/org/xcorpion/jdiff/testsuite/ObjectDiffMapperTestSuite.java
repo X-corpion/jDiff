@@ -1,11 +1,13 @@
 package org.xcorpion.jdiff.testsuite;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -371,6 +373,84 @@ public abstract class ObjectDiffMapperTestSuite implements
         assertThat(fieldDiffs.get(2).getDiff().getOperation(), is(Diff.Operation.REMOVE_VALUE));
         assertThat(fieldDiffs.get(2).getDiff().getSrcValue(), is("c"));
         assertThat(fieldDiffs.get(2).getDiff().getTargetValue(), is(nullValue()));
+    }
+
+    @Override
+    @Test
+    public void applyDiffToPrimitiveList() {
+        List<Integer> src = new ArrayList<>();
+        src.add(1);
+        src.add(2);
+
+        List<Integer> target = new ArrayList<>();
+        target.add(2);
+        target.add(3);
+
+        DiffNode diff = getDiffMapper().diff(src, target);
+        List<Integer> result = getDiffMapper().applyDiff(src, diff);
+
+        assertThat(result, hasSize(2));
+        assertThat(result.get(0), is(2));
+        assertThat(result.get(1), is(3));
+    }
+
+    @Override
+    @Test
+    public void applyDiffToCustomObjectList() {
+        List<TestClass> src = new ArrayList<>();
+        src.add(new TestClass("a", 1));
+        src.add(new TestClass("b", 2));
+
+        List<TestClass> target = new ArrayList<>();
+        target.add(new TestClass("b", 2));
+        target.add(new TestClass("c", 3));
+        target.add(new TestClass("d", 4));
+
+        DiffNode diff = getDiffMapper().diff(src, target);
+        List<TestClass> result = getDiffMapper().applyDiff(src, diff);
+
+        assertThat(result, hasSize(3));
+        assertThat(result.get(0), is(new TestClass("b", 2)));
+        assertThat(result.get(1), is(new TestClass("c", 3)));
+        assertThat(result.get(2), is(new TestClass("d", 4)));
+
+        // merging will be done using existing objects but their values would be altered
+        assertThat(result.get(0) != target.get(0), is(true));
+        assertThat(result.get(1) != target.get(1), is(true));
+
+        // this one will be using the target element directly by default as it doesn't exist in src
+        assertThat(result.get(2) == target.get(2), is(true));
+    }
+
+    @Override
+    @Test
+    public void applyDiffToNestedCollectionList() {
+        List<Set<Integer>> src = new ArrayList<>();
+        Set<Integer> srcSet1 = new HashSet<>();
+        srcSet1.add(1);
+        srcSet1.add(2);
+        Set<Integer> srcSet2 = new HashSet<>();
+        srcSet2.add(3);
+        src.add(srcSet1);
+        src.add(srcSet2);
+
+
+        List<Set<Integer>> target = new ArrayList<>();
+        Set<Integer> targetSet1 = new HashSet<>();
+        targetSet1.add(0);
+        targetSet1.add(1);
+        target.add(targetSet1);
+
+        DiffNode diff = getDiffMapper().diff(src, target);
+        List<Set<Integer>> result = getDiffMapper().applyDiff(src, diff);
+        assertThat(result, hasSize(1));
+
+        // the wrapped collection will be reused by default
+        assertThat(result.get(0) == src.get(0), is(true));
+
+        // however the values will be altered
+        assertThat(result.get(0), containsInAnyOrder(0, 1));
+        assertThat(result.get(0), not(contains(2)));
     }
     //endregion
 

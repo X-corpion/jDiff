@@ -18,6 +18,16 @@ import java.util.stream.Collectors;
 
 public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
 
+    private static class RemovalPair {
+        final int index;
+        final Object obj;
+
+        RemovalPair(int index, Object obj) {
+            this.index = index;
+            this.obj = obj;
+        }
+    }
+
     private Object obj;
     private Object updatedObj;
     private DiffNode diffNode;
@@ -132,7 +142,12 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                 this.updatedObj = ReflectionUtils.shallowClone(src);
             }
         }
-        if (this.updatedObj instanceof Set) {
+        if (this.updatedObj instanceof List) {
+            if (op != Diff.Operation.NO_OP) {
+                throw new MergingException("Illegal operation for list: " + op);
+            }
+            handleListChildUpdates(this.updatedObj, nextLevelMergingContext);
+        } else if (this.updatedObj instanceof Set) {
             if (op != Diff.Operation.NO_OP) {
                 throw new MergingException("Illegal operation for set: " + op);
             }
@@ -142,6 +157,9 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                 throw new MergingException("Illegal operation for map: " + op);
             }
             handleMapChildUpdates(this.updatedObj, nextLevelMergingContext);
+        } else if (this.updatedObj instanceof Iterable) {
+            throw new UnsupportedOperationException("Sorry, auto iterable merging is not supported. " +
+                    "Please implement your type handler to handle merging.");
         } else {
             handleObjectChildUpdates(this.updatedObj, nextLevelMergingContext);
         }
@@ -167,6 +185,40 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                     Array.set(parent, index, diff.getTargetValue());
                     break;
             }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleListChildUpdates(Object parent, MergingContext mergingContext) {
+        List<Object> list = (List<Object>) parent;
+        List<RemovalPair> itemsToRemove = new ArrayList<>();
+        for (Map.Entry<Object, DiffNode> entry : diffNode.getFieldDiffs().entrySet()) {
+            int index = (int) entry.getKey();
+            Diff diff = entry.getValue().getDiff();
+            switch (diff.getOperation()) {
+                case NO_OP:
+                    break;
+                case UPDATE_VALUE:
+                    ObjectDiffMapper diffMapper = mergingContext.getObjectDiffMapper();
+                    if (diffMapper.isEnabled(Feature.MergingValidationCheck.VALIDATE_SOURCE_VALUE)) {
+                        Object expectedSrc = diff.getSrcValue();
+                        Object src = list.get(index);
+                        validateSourceValue(diffMapper, src, expectedSrc);
+                    }
+                    list.set(index, diff.getTargetValue());
+                    break;
+                case ADD_VALUE:
+                    list.add(diff.getTargetValue());
+                    break;
+                case REMOVE_VALUE:
+                    itemsToRemove.add(new RemovalPair(index, diff.getSrcValue()));
+                    break;
+            }
+        }
+
+        itemsToRemove.sort((p1, p2) -> p2.index - p1.index);
+        for (RemovalPair pair : itemsToRemove) {
+            list.remove(pair.index);
         }
     }
 
@@ -302,13 +354,24 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                     diffIter = Collections.emptyIterator();
                 } else {
                     Set<Map.Entry<Object, DiffNode>> entries = childDiffs.entrySet();
-                    // for arrays we need to ignore element removals. They are already handled during array shrinking.
-                    if (updatedObj != null && updatedObj.getClass().isArray()) {
-                        entries = entries.stream()
-                                .filter(e -> e.getValue().getDiff().getOperation() != Diff.Operation.REMOVE_VALUE)
-                                .collect(Collectors.toSet());
+                    // we need to ignore element removals. They are already handled at one level up.
+                    List<Map.Entry<Object, DiffNode>> filteredEntries = new ArrayList<>();
+                    for (Map.Entry<Object, DiffNode> entry : entries) {
+                        if (entry.getValue().getDiff().getOperation() != Diff.Operation.REMOVE_VALUE) {
+                            filteredEntries.add(entry);
+                        }
                     }
-                    diffIter = entries.iterator();
+
+                    // for array and iterables we need to sort the indices otherwise we might end up jumping around
+                    if ((updatedObj != null && updatedObj.getClass().isArray()) ||
+                            updatedObj instanceof Iterable) {
+                        filteredEntries.sort((e1, e2) -> {
+                            int index1 = (int) e1.getKey();
+                            int index2 = (int) e2.getKey();
+                            return index1 - index2;
+                        });
+                    }
+                    diffIter = filteredEntries.iterator();
                 }
             }
 
@@ -352,7 +415,7 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                         throw new MergingException("Expect index value for iterable object. Got: " + fieldKey);
                     }
                     Integer key = (Integer) fieldKey;
-                    while (index != key) {
+                    while (index++ != key) {
                         fieldObj = collectionIter.next();
                     }
                     return new DiffApplicationTree(fieldObj, diffNode);
