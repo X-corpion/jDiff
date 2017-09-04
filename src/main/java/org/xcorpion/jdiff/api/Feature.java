@@ -22,6 +22,18 @@ public interface Feature {
         }
     }
 
+    enum TypeHandler implements Feature {
+        IGNORE_FIELD_TYPE_HANDLER_FOR_MERGING,
+        IGNORE_CLASS_TYPE_HANDLER_FOR_MERGING,
+        IGNORE_GLOBAL_TYPE_HANDLER_FOR_MERGING
+        ;
+
+        @Override
+        public boolean allowMultiple() {
+            return true;
+        }
+    }
+
     enum MergingValidationCheck implements Feature {
         VALIDATE_SOURCE_VALUE
         ;

@@ -66,16 +66,20 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
         if (op == null) {
             throw new IllegalStateException("Unexpected operation: null");
         }
-        TypeHandler typeHandler = ReflectionUtils.getClassAnnotation(src, TypeHandler.class);
-        if (typeHandler != null) {
-            this.updatedObj = mergeUsingAnnotationMergingHandler(src, diffNode, mergingContext, typeHandler);
-            return this.updatedObj;
-        }
-        if (src != null) {
-            MergingHandler<Object> mergingHandler = objectDiffMapper.getMergingHandler((Class<Object>) src.getClass());
-            if (mergingHandler != null) {
-                this.updatedObj = mergeUsingCustomHandler(src, diffNode, mergingContext, mergingHandler);
+        if (!objectDiffMapper.isEnabled(Feature.TypeHandler.IGNORE_CLASS_TYPE_HANDLER_FOR_MERGING)) {
+            TypeHandler typeHandler = ReflectionUtils.getClassAnnotation(src, TypeHandler.class);
+            if (typeHandler != null) {
+                this.updatedObj = mergeUsingAnnotationMergingHandler(src, diffNode, mergingContext, typeHandler);
                 return this.updatedObj;
+            }
+        }
+        if (!objectDiffMapper.isEnabled(Feature.TypeHandler.IGNORE_GLOBAL_TYPE_HANDLER_FOR_MERGING)) {
+            if (src != null) {
+                MergingHandler<Object> mergingHandler = objectDiffMapper.getMergingHandler((Class<Object>) src.getClass());
+                if (mergingHandler != null) {
+                    this.updatedObj = mergeUsingCustomHandler(src, diffNode, mergingContext, mergingHandler);
+                    return this.updatedObj;
+                }
             }
         }
 
@@ -376,23 +380,25 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                     Object fieldSrc;
                     try {
                         fieldSrc = field.get(parent);
-                    }
-                    catch (IllegalAccessException e) {
+                    } catch (IllegalAccessException e) {
                         throw new MergingException("Failed to get " + fieldName + " in " + parent.getClass().getName(), e);
                     }
-                    Object fieldTarget;
-                    TypeHandler fieldTypeHandler = field.getAnnotation(TypeHandler.class);
-                    if (fieldTypeHandler != null) {
-                        fieldTarget = mergeUsingAnnotationMergingHandler(fieldSrc, entry.getValue(), mergingContext, fieldTypeHandler);
-                        removedFieldDiffKeys.add(fieldName);
+                    Object fieldTarget = null;
+                    boolean useCustomHandler = false;
+                    if (!mergingContext.getObjectDiffMapper().isEnabled(Feature.TypeHandler.IGNORE_FIELD_TYPE_HANDLER_FOR_MERGING)) {
+                        TypeHandler fieldTypeHandler = field.getAnnotation(TypeHandler.class);
+                        if (fieldTypeHandler != null) {
+                            fieldTarget = mergeUsingAnnotationMergingHandler(fieldSrc, entry.getValue(), mergingContext, fieldTypeHandler);
+                            removedFieldDiffKeys.add(fieldName);
+                            useCustomHandler = true;
+                        }
                     }
-                    else {
+                    if (!useCustomHandler) {
                         fieldTarget = diff.getTargetValue();
                     }
                     try {
                         field.set(parent, fieldTarget);
-                    }
-                    catch (IllegalAccessException e) {
+                    } catch (IllegalAccessException e) {
                         throw new MergingException("Failed to set " + fieldName + " in " + parent.getClass().getName(), e);
                     }
                     break;

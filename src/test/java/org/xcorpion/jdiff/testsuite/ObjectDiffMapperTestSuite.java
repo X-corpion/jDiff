@@ -23,6 +23,7 @@ import org.xcorpion.jdiff.api.ObjectDiffMapper;
 import org.xcorpion.jdiff.exception.MergingException;
 import org.xcorpion.jdiff.handler.DateDiffingHandler;
 import org.xcorpion.jdiff.handler.DateMergingHandler;
+import org.xcorpion.jdiff.handler.TestIterableMergingHandler;
 
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.assertThat;
@@ -97,6 +98,18 @@ public abstract class ObjectDiffMapperTestSuite implements
             return field != null ? field.hashCode() : 0;
         }
 
+    }
+
+    private static class TestClassWithIterable {
+
+        @TypeHandler(
+                mergeUsing = TestIterableMergingHandler.class
+        )
+        Iterable<String> stringIterable;
+
+        TestClassWithIterable(Iterable<String> stringIterable) {
+            this.stringIterable = stringIterable;
+        }
     }
 
     private static class TestClassWithFieldTypeHandler {
@@ -465,6 +478,32 @@ public abstract class ObjectDiffMapperTestSuite implements
         assertThat(result.get(0), containsInAnyOrder(0, 1));
         assertThat(result.get(0), not(contains(2)));
     }
+    //endregion
+
+    //region Iterable test cases
+
+    @Override
+    @Test(expected = MergingException.class)
+    public void iterableMergingShouldThrowExceptionByDefault() {
+        TestClassWithIterable src = new TestClassWithIterable(Arrays.asList("1", "2"));
+        TestClassWithIterable target = new TestClassWithIterable(Arrays.asList("1", "3", "4"));
+        ObjectDiffMapper diffMapper = getDiffMapper();
+        diffMapper.enable(Feature.TypeHandler.IGNORE_FIELD_TYPE_HANDLER_FOR_MERGING);
+        DiffNode diff = diffMapper.diff(src, target);
+        diffMapper.applyDiff(src, diff);
+    }
+
+    @Override
+    public void iterableMergingCanBeDoneWithCustomMerger() {
+        TestClassWithIterable src = new TestClassWithIterable(Arrays.asList("1", "2"));
+        TestClassWithIterable target = new TestClassWithIterable(Arrays.asList("1", "3", "4"));
+        ObjectDiffMapper diffMapper = getDiffMapper();
+        DiffNode diff = diffMapper.diff(src, target);
+        TestClassWithIterable result = diffMapper.applyDiff(src, diff);
+        assertThat(result.stringIterable, containsInAnyOrder("1", "3", "4"));
+        assertThat(result.stringIterable, not(contains("2")));
+    }
+
     //endregion
 
     //region Map test cases
