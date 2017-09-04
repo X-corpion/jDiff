@@ -1,11 +1,13 @@
 package org.xcorpion.jdiff.util.collection;
 
+import org.xcorpion.jdiff.annotation.TypeHandler;
 import org.xcorpion.jdiff.api.Diff;
 import org.xcorpion.jdiff.api.DiffNode;
+import org.xcorpion.jdiff.api.EqualityChecker;
 import org.xcorpion.jdiff.api.Feature;
 import org.xcorpion.jdiff.api.MergingContext;
+import org.xcorpion.jdiff.api.MergingHandler;
 import org.xcorpion.jdiff.api.ObjectDiffMapper;
-import org.xcorpion.jdiff.api.TypeHandler;
 import org.xcorpion.jdiff.exception.MergingException;
 import org.xcorpion.jdiff.exception.MergingValidationError;
 import org.xcorpion.jdiff.internal.model.DefaultMergingContext;
@@ -14,7 +16,7 @@ import org.xcorpion.jdiff.util.reflection.ReflectionUtils;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.util.*;
-import java.util.stream.Collectors;
+import javax.annotation.Nonnull;
 
 public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
 
@@ -31,11 +33,18 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
     private Object obj;
     private Object updatedObj;
     private DiffNode diffNode;
+    private Set<Object> removedFieldDiffKeys = new HashSet<>();
+    private boolean shouldSkip;
 
     public DiffApplicationTree(Object obj, DiffNode diffNode) {
+        this(obj, diffNode, false);
+    }
+
+    public DiffApplicationTree(Object obj, DiffNode diffNode, boolean shouldSkip) {
         this.obj = obj;
         this.updatedObj = obj;
         this.diffNode = diffNode;
+        this.shouldSkip = shouldSkip;
     }
 
     @Override
@@ -45,6 +54,9 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
 
     @SuppressWarnings("unchecked")
     public Object applyDiff(MergingContext mergingContext) {
+        if (shouldSkip) {
+            return obj;
+        }
         ObjectDiffMapper objectDiffMapper = mergingContext.getObjectDiffMapper();
         Set<Feature.MergingStrategy> currentContextStrategies = mergingContext.getMergingStrategies();
         Object src = obj;
@@ -53,6 +65,18 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
         Diff.Operation op = diff.getOperation();
         if (op == null) {
             throw new IllegalStateException("Unexpected operation: null");
+        }
+        TypeHandler typeHandler = ReflectionUtils.getClassAnnotation(src, TypeHandler.class);
+        if (typeHandler != null) {
+            this.updatedObj = mergeUsingAnnotationMergingHandler(src, diffNode, mergingContext, typeHandler);
+            return this.updatedObj;
+        }
+        if (src != null) {
+            MergingHandler<Object> mergingHandler = objectDiffMapper.getMergingHandler((Class<Object>) src.getClass());
+            if (mergingHandler != null) {
+                this.updatedObj = mergeUsingCustomHandler(src, diffNode, mergingContext, mergingHandler);
+                return this.updatedObj;
+            }
         }
 
         // for these ops there's no further actions required
@@ -106,11 +130,8 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                 case NO_OP: {
                     Object newArray = src;
                     if (objectDiffMapper.isMergingStrategyEnabled(
-                            Feature.MergingStrategy.CLONE_SOURCE_COLLECTIONS_ONLY, currentContextStrategies)) {
-                        int len = Array.getLength(src);
-                        newArray = Array.newInstance(src.getClass().getComponentType(), len);
-                        //noinspection SuspiciousSystemArraycopy
-                        System.arraycopy(src, 0, newArray, 0, len);
+                            Feature.MergingStrategy.SHALLOW_CLONE_SOURCE_COLLECTIONS, currentContextStrategies)) {
+                        newArray = cloneArray(src);
                     }
                     this.updatedObj = newArray;
                     handleArrayChildUpdates(newArray, mergingContext);
@@ -123,6 +144,7 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                     }
                     int currentLength = Array.getLength(src);
                     Object newArray = Array.newInstance(src.getClass().getComponentType(), newLength);
+                    //noinspection SuspiciousSystemArraycopy
                     System.arraycopy(src, 0, newArray, 0, Math.min(currentLength, newLength));
                     this.updatedObj = newArray;
                     handleArrayChildUpdates(newArray, nextLevelMergingContext);
@@ -133,14 +155,7 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
             }
         }
         if (mergingContext.isRootObject()) {
-            if (objectDiffMapper.isMergingStrategyEnabled(
-                    Feature.MergingStrategy.CLONE_SOURCE_FULL_OBJECT, currentContextStrategies)) {
-                this.updatedObj = ReflectionUtils.deepClone(src);
-            }
-            else if (objectDiffMapper.isMergingStrategyEnabled(
-                    Feature.MergingStrategy.CLONE_SOURCE_ROOT, currentContextStrategies)) {
-                this.updatedObj = ReflectionUtils.shallowClone(src);
-            }
+            this.updatedObj = cloneSrcIfNeeded(src, mergingContext);
         }
         if (this.updatedObj instanceof List) {
             if (op != Diff.Operation.NO_OP) {
@@ -166,6 +181,63 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
         return this.updatedObj;
     }
 
+    private static Object cloneSrcIfNeeded(Object src, MergingContext mergingContext) {
+        ObjectDiffMapper objectDiffMapper = mergingContext.getObjectDiffMapper();
+        Set<Feature.MergingStrategy> currentContextStrategies = mergingContext.getMergingStrategies();
+        if (objectDiffMapper.isMergingStrategyEnabled(
+                Feature.MergingStrategy.DEEP_CLONE_SOURCE, currentContextStrategies)) {
+            return ReflectionUtils.deepClone(src);
+        }
+        else if (objectDiffMapper.isMergingStrategyEnabled(
+                Feature.MergingStrategy.SHALLOW_CLONE_SOURCE_ROOT, currentContextStrategies)) {
+            return ReflectionUtils.shallowClone(src);
+        }
+        else if (objectDiffMapper.isMergingStrategyEnabled(
+                Feature.MergingStrategy.SHALLOW_CLONE_SOURCE_COLLECTIONS, currentContextStrategies)) {
+            if (src instanceof Collection) {
+                return ReflectionUtils.shallowClone(src);
+            }
+            if (src != null && src.getClass().isArray()) {
+                return cloneArray(src);
+            }
+        }
+        return src;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object mergeUsingAnnotationMergingHandler(@Nonnull Object src,
+            @Nonnull DiffNode diffNode, @Nonnull MergingContext mergingContext,
+            @Nonnull TypeHandler typeHandler) {
+        Class<? extends MergingHandler<?>> mergingHandlerClass = typeHandler.mergeUsing();
+        if (mergingHandlerClass != TypeHandler.None.class) {
+            MergingHandler<Object> mergingHandler;
+            try {
+                mergingHandler = (MergingHandler<Object>) mergingHandlerClass.newInstance();
+            }
+            catch (Throwable e) {
+                throw new MergingException("Failed to instantiate merging handler " + mergingHandlerClass +
+                        " for class " + src.getClass(), e);
+            }
+            return mergeUsingCustomHandler(src, diffNode, mergingContext, mergingHandler);
+        } else {
+            return cloneSrcIfNeeded(src, mergingContext);
+        }
+    }
+
+    private static Object mergeUsingCustomHandler(@Nonnull Object src, @Nonnull DiffNode diffNode,
+            @Nonnull MergingContext mergingContext, @Nonnull MergingHandler<Object> mergingHandler) {
+        src = cloneSrcIfNeeded(src, mergingContext);
+        return mergingHandler.merge(src, diffNode, mergingContext);
+    }
+
+    private static Object cloneArray(Object src) {
+        int len = Array.getLength(src);
+        Object newArray = Array.newInstance(src.getClass().getComponentType(), len);
+        //noinspection SuspiciousSystemArraycopy
+        System.arraycopy(src, 0, newArray, 0, len);
+        return newArray;
+    }
+
     private void handleArrayChildUpdates(Object parent, MergingContext mergingContext) {
         for (Map.Entry<Object, DiffNode> entry : diffNode.getFieldDiffs().entrySet()) {
             int index = (int) entry.getKey();
@@ -183,6 +255,9 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                     }
                 case ADD_VALUE:
                     Array.set(parent, index, diff.getTargetValue());
+                    break;
+                case REMOVE_VALUE:
+                    removedFieldDiffKeys.add(entry.getKey());
                     break;
             }
         }
@@ -212,6 +287,7 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                     break;
                 case REMOVE_VALUE:
                     itemsToRemove.add(new RemovalPair(index, diff.getSrcValue()));
+                    removedFieldDiffKeys.add(entry.getKey());
                     break;
             }
         }
@@ -225,8 +301,8 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
     @SuppressWarnings("unchecked")
     private void handleSetChildUpdates(Object parent, MergingContext mergingContext) {
         Set<Object> set = (Set<Object>) parent;
-        for (DiffNode diffWrapper : diffNode.getFieldDiffs().values()) {
-            Diff diff = diffWrapper.getDiff();
+        for (Map.Entry<Object, DiffNode> entry : diffNode.getFieldDiffs().entrySet()) {
+            Diff diff = entry.getValue().getDiff();
             switch (diff.getOperation()) {
                 case NO_OP:
                     break;
@@ -243,6 +319,7 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                     break;
                 case REMOVE_VALUE:
                     set.remove(diff.getSrcValue());
+                    removedFieldDiffKeys.add(entry.getKey());
                     break;
             }
         }
@@ -277,6 +354,7 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                         }
                     }
                     map.remove(key);
+                    removedFieldDiffKeys.add(entry.getKey());
                     break;
             }
         }
@@ -295,8 +373,24 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                         throw new MergingException("Unable to find " + fieldName + " in " + parent.getClass().getName());
                     }
                     field.setAccessible(true);
+                    Object fieldSrc;
                     try {
-                        field.set(parent, diff.getTargetValue());
+                        fieldSrc = field.get(parent);
+                    }
+                    catch (IllegalAccessException e) {
+                        throw new MergingException("Failed to get " + fieldName + " in " + parent.getClass().getName(), e);
+                    }
+                    Object fieldTarget;
+                    TypeHandler fieldTypeHandler = field.getAnnotation(TypeHandler.class);
+                    if (fieldTypeHandler != null) {
+                        fieldTarget = mergeUsingAnnotationMergingHandler(fieldSrc, entry.getValue(), mergingContext, fieldTypeHandler);
+                        removedFieldDiffKeys.add(fieldName);
+                    }
+                    else {
+                        fieldTarget = diff.getTargetValue();
+                    }
+                    try {
+                        field.set(parent, fieldTarget);
                     }
                     catch (IllegalAccessException e) {
                         throw new MergingException("Failed to set " + fieldName + " in " + parent.getClass().getName(), e);
@@ -321,9 +415,9 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                 throw new MergingValidationError("Expected source value is null but actual value is not");
             }
 
-            TypeHandler<Object> typeHandler = objectDiffMapper.getTypeHandler((Class<Object>) src.getClass());
-            if (typeHandler != null) {
-                if (!typeHandler.isEqualTo(src, expectedSrc)) {
+            EqualityChecker<Object> equalityChecker = objectDiffMapper.getEqualityChecker((Class<Object>) src.getClass());
+            if (equalityChecker != null) {
+                if (!equalityChecker.isEqualTo(src, expectedSrc)) {
                     throw new MergingValidationError("Expected value not equal to actual");
                 }
             }
@@ -351,27 +445,19 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
             {
                 Map<Object, DiffNode> childDiffs = diffNode.getFieldDiffs();
                 if (childDiffs == null) {
-                    diffIter = Collections.emptyIterator();
+                    diffIter = Collections.emptyListIterator();
                 } else {
-                    Set<Map.Entry<Object, DiffNode>> entries = childDiffs.entrySet();
-                    // we need to ignore element removals. They are already handled at one level up.
-                    List<Map.Entry<Object, DiffNode>> filteredEntries = new ArrayList<>();
-                    for (Map.Entry<Object, DiffNode> entry : entries) {
-                        if (entry.getValue().getDiff().getOperation() != Diff.Operation.REMOVE_VALUE) {
-                            filteredEntries.add(entry);
-                        }
-                    }
-
+                    List<Map.Entry<Object, DiffNode>> entries = new ArrayList<>(childDiffs.entrySet());
                     // for array and iterables we need to sort the indices otherwise we might end up jumping around
                     if ((updatedObj != null && updatedObj.getClass().isArray()) ||
                             updatedObj instanceof Iterable) {
-                        filteredEntries.sort((e1, e2) -> {
+                        entries.sort((e1, e2) -> {
                             int index1 = (int) e1.getKey();
                             int index2 = (int) e2.getKey();
                             return index1 - index2;
                         });
                     }
-                    diffIter = filteredEntries.iterator();
+                    diffIter = entries.iterator();
                 }
             }
 
@@ -389,24 +475,31 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                 Map.Entry<Object, DiffNode> diffEntry = diffIter.next();
                 Object fieldKey = diffEntry.getKey();
                 DiffNode diffNode = diffEntry.getValue();
+                boolean shouldSkip = removedFieldDiffKeys.contains(fieldKey);
                 if (updatedObj.getClass().isArray()) {
                     if (!(fieldKey instanceof Integer)) {
                         throw new MergingException("Expect index value for array object. Got: " + fieldKey);
                     }
+                    if (shouldSkip) {
+                        return new DiffApplicationTree(null, diffNode, true);
+                    }
                     Integer key = (Integer) fieldKey;
                     Object fieldObj = Array.get(updatedObj, key);
-                    return new DiffApplicationTree(fieldObj, diffNode);
+                    return new DiffApplicationTree(fieldObj, diffNode, shouldSkip);
                 } else if (updatedObj instanceof Set) {
                     if (collectionIter == null) {
                         collectionIter = ((Set<Object>) updatedObj).iterator();
                     }
                     Object fieldObj = collectionIter.next();
-                    return new DiffApplicationTree(fieldObj, diffNode);
+                    return new DiffApplicationTree(fieldObj, diffNode, shouldSkip);
                 } else if (updatedObj instanceof Map) {
                     Map<Object, Object> map = (Map<Object, Object>) updatedObj;
                     Object fieldObj = map.get(fieldKey);
-                    return new DiffApplicationTree(fieldObj, diffNode);
+                    return new DiffApplicationTree(fieldObj, diffNode, shouldSkip);
                 } else if (updatedObj instanceof Iterable) {
+                    if (shouldSkip) {
+                        return new DiffApplicationTree(null, diffNode, true);
+                    }
                     if (collectionIter == null) {
                         collectionIter = ((Iterable<Object>) updatedObj).iterator();
                     }
@@ -418,7 +511,7 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                     while (index++ != key) {
                         fieldObj = collectionIter.next();
                     }
-                    return new DiffApplicationTree(fieldObj, diffNode);
+                    return new DiffApplicationTree(fieldObj, diffNode, shouldSkip);
                 }
                 if (!(fieldKey instanceof String)) {
                     throw new MergingException("Expect field name. Got: " + fieldKey);
@@ -437,7 +530,7 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                     throw new MergingException("Unable to access " + fieldName +
                             " in class " + updatedObj.getClass().getName(), e);
                 }
-                return new DiffApplicationTree(fieldObj, diffNode);
+                return new DiffApplicationTree(fieldObj, diffNode, shouldSkip);
             }
         };
     }

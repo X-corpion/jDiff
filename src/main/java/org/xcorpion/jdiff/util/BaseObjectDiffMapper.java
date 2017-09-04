@@ -19,7 +19,9 @@ public abstract class BaseObjectDiffMapper implements ObjectDiffMapper {
     };
 
     private Map<Class<? extends Feature>, List<Feature>> features = new HashMap<>();
-    private Map<Class<?>, TypeHandler<?>> typeHandlers = new HashMap<>();
+    private Map<Class<?>, EqualityChecker<?>> equalityCheckers = new HashMap<>();
+    private Map<Class<?>, DiffingHandler<?>> diffingHandlers = new HashMap<>();
+    private Map<Class<?>, MergingHandler<?>> mergingHandlers = new HashMap<>();
     private static final Set<Class<?>> PRIMITIVE_TYPES = new HashSet<>();
 
     static {
@@ -54,13 +56,35 @@ public abstract class BaseObjectDiffMapper implements ObjectDiffMapper {
     }
 
     @Override
-    public <T> TypeHandler<T> getTypeHandler(@Nonnull Class<T> cls) {
-        return (TypeHandler<T>) typeHandlers.get(cls);
+    public <T> EqualityChecker<T> getEqualityChecker(@Nonnull Class<T> cls) {
+        return (EqualityChecker<T>) equalityCheckers.get(cls);
     }
 
     @Override
-    public <T> ObjectDiffMapper registerTypeHandler(@Nonnull Class<T> cls, @Nonnull TypeHandler<? super T> typeHandler) {
-        typeHandlers.put(cls, typeHandler);
+    public <T> DiffingHandler<T> getDiffingHandler(@Nonnull Class<T> cls) {
+        return (DiffingHandler<T>) diffingHandlers.get(cls);
+    }
+
+    @Override
+    public <T> MergingHandler<T> getMergingHandler(@Nonnull Class<T> cls) {
+        return (MergingHandler<T>) mergingHandlers.get(cls);
+    }
+
+    @Override
+    public <T> ObjectDiffMapper registerEqualityChecker(@Nonnull Class<T> cls, @Nonnull EqualityChecker<? super T> equalityChecker) {
+        equalityCheckers.put(cls, equalityChecker);
+        return this;
+    }
+
+    @Override
+    public <T> ObjectDiffMapper registerDiffingHandler(@Nonnull Class<T> cls, @Nonnull DiffingHandler<? super T> diffingHandler) {
+        diffingHandlers.put(cls, diffingHandler);
+        return this;
+    }
+
+    @Override
+    public <T> ObjectDiffMapper registerMergingHandler(@Nonnull Class<T> cls, @Nonnull MergingHandler<? super T> mergingHandler) {
+        mergingHandlers.put(cls, mergingHandler);
         return this;
     }
 
@@ -103,7 +127,7 @@ public abstract class BaseObjectDiffMapper implements ObjectDiffMapper {
             return false;
         }
         Class<?> type = determineClass(src, target);
-        TypeHandler<Object> typeHandler = (TypeHandler<Object>) getTypeHandler(type);
+        EqualityChecker<Object> typeHandler = (EqualityChecker<Object>) getEqualityChecker(type);
         if (typeHandler != null) {
             return typeHandler.isEqualTo(src, target);
         }

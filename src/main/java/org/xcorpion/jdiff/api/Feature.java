@@ -34,9 +34,9 @@ public interface Feature {
 
     enum MergingStrategy implements Feature {
 
-        CLONE_SOURCE_ROOT,
-        CLONE_SOURCE_FULL_OBJECT,
-        CLONE_SOURCE_COLLECTIONS_ONLY,
+        SHALLOW_CLONE_SOURCE_ROOT,
+        DEEP_CLONE_SOURCE,
+        SHALLOW_CLONE_SOURCE_COLLECTIONS,
 
     }
 

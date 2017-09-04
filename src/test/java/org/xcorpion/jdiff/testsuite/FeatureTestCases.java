@@ -10,4 +10,10 @@ public interface FeatureTestCases {
     @Test
     void isAbleToUseHashCodeForFastEqualityCheck();
 
+    @Test
+    void customGlobalMergingHandler();
+
+    @Test
+    void customClassMergingHandler();
+
 }

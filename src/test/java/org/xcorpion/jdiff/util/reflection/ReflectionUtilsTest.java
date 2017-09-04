@@ -2,9 +2,12 @@ package org.xcorpion.jdiff.util.reflection;
 
 import org.junit.Test;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.util.*;
 
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThat;
@@ -47,6 +50,20 @@ public class ReflectionUtilsTest {
         }
         Object nullObject;
         int intPrimitive = 1;
+
+    }
+
+    @Retention(RetentionPolicy.RUNTIME)
+    private @interface NonInheritedAnnotation {
+
+    }
+
+    @NonInheritedAnnotation
+    private static class ClassWithNonInheritedAnnotation {
+
+    }
+
+    private static class ChildClassWithNonInheritedAnnotation extends ClassWithNonInheritedAnnotation {
 
     }
 
@@ -130,5 +147,19 @@ public class ReflectionUtilsTest {
         assertThat(cloned.list == obj.list, is(true));
         assertThat(cloned.map == obj.map, is(true));
     }
+
+    @Test
+    public void getAnnotationOnClassShouldReturnNullIfObjectIsNull() {
+        assertThat(ReflectionUtils.getClassAnnotation((Object) null, Override.class), is(nullValue()));
+    }
+
+    @Test
+    public void getAnnotationOnClassShouldFindNonInheritedAnnotationInSuperclass() {
+        ChildClassWithNonInheritedAnnotation obj = new ChildClassWithNonInheritedAnnotation();
+        NonInheritedAnnotation anno = ReflectionUtils.getClassAnnotation(obj, NonInheritedAnnotation.class);
+        assertThat(anno, is(notNullValue()));
+    }
+
+
 
 }

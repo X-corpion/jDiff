@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -13,16 +14,15 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-
 import org.junit.Test;
+import org.xcorpion.jdiff.annotation.TypeHandler;
 import org.xcorpion.jdiff.api.Diff;
 import org.xcorpion.jdiff.api.DiffNode;
 import org.xcorpion.jdiff.api.Feature;
 import org.xcorpion.jdiff.api.ObjectDiffMapper;
-import org.xcorpion.jdiff.api.TypeHandler;
 import org.xcorpion.jdiff.exception.MergingException;
+import org.xcorpion.jdiff.handler.DateDiffingHandler;
+import org.xcorpion.jdiff.handler.DateMergingHandler;
 
 import static org.hamcrest.Matchers.*;
 import static org.junit.Assert.assertThat;
@@ -97,6 +97,19 @@ public abstract class ObjectDiffMapperTestSuite implements
             return field != null ? field.hashCode() : 0;
         }
 
+    }
+
+    private static class TestClassWithFieldTypeHandler {
+
+        @TypeHandler(
+                diffUsing = DateDiffingHandler.class,
+                mergeUsing = DateMergingHandler.class
+        )
+        Date date;
+
+        TestClassWithFieldTypeHandler(Date date) {
+            this.date = date;
+        }
     }
 
     protected abstract ObjectDiffMapper getDiffMapper();
@@ -601,7 +614,7 @@ public abstract class ObjectDiffMapperTestSuite implements
         target.put("c", 2);
 
         DiffNode diff = getDiffMapper().diff(src, target);
-        Map<String, Integer> result = getDiffMapper().applyDiff(src, diff, Collections.singleton(Feature.MergingStrategy.CLONE_SOURCE_ROOT));
+        Map<String, Integer> result = getDiffMapper().applyDiff(src, diff, Collections.singleton(Feature.MergingStrategy.SHALLOW_CLONE_SOURCE_ROOT));
         assertThat(src != target, is(true));
         assertThat(result.size(), is(2));
         assertThat(result, hasEntry("a", 2));
@@ -621,7 +634,7 @@ public abstract class ObjectDiffMapperTestSuite implements
         target.put(new TestClass(2, "c"), 1);
 
         DiffNode diff = getDiffMapper().diff(src, target);
-        Map<TestClass, Integer> result = getDiffMapper().applyDiff(src, diff, Collections.singleton(Feature.MergingStrategy.CLONE_SOURCE_ROOT));
+        Map<TestClass, Integer> result = getDiffMapper().applyDiff(src, diff, Collections.singleton(Feature.MergingStrategy.SHALLOW_CLONE_SOURCE_ROOT));
         assertThat(src != target, is(true));
         assertThat(result.size(), is(2));
         assertThat(result, hasEntry(new TestClass(1, "a"), 2));
@@ -665,7 +678,7 @@ public abstract class ObjectDiffMapperTestSuite implements
         target.add("c");
 
         DiffNode diff = getDiffMapper().diff(src, target);
-        Set<String> result = getDiffMapper().applyDiff(src, diff, Collections.singleton(Feature.MergingStrategy.CLONE_SOURCE_ROOT));
+        Set<String> result = getDiffMapper().applyDiff(src, diff, Collections.singleton(Feature.MergingStrategy.SHALLOW_CLONE_SOURCE_ROOT));
         assertThat(src != target, is(true));
         assertThat(result.size(), is(2));
         assertThat(result, containsInAnyOrder("a", "c"));
@@ -780,7 +793,7 @@ public abstract class ObjectDiffMapperTestSuite implements
         TestClass src = new TestClass("1", 2);
         TestClass target = new TestClass("2", 3);
         DiffNode diff = getDiffMapper().diff(src, target);
-        TestClass result = getDiffMapper().applyDiff(src, diff, Collections.singleton(Feature.MergingStrategy.CLONE_SOURCE_ROOT));
+        TestClass result = getDiffMapper().applyDiff(src, diff, Collections.singleton(Feature.MergingStrategy.SHALLOW_CLONE_SOURCE_ROOT));
 
         assertThat(result == src, is(false));
         assertThat(result.field1, is("2"));
@@ -797,12 +810,7 @@ public abstract class ObjectDiffMapperTestSuite implements
     @Test
     public void diffTwoDeepObjectsThatWillFailRecursiveSolution() {
         // general equality will cause stack overflow error so we need to use the type handler feature
-        getDiffMapper().registerTypeHandler(TestClass.class, new TypeHandler<TestClass>() {
-            @Override
-            public boolean isEqualTo(@Nullable TestClass src, @Nullable TestClass target) {
-                return false;
-            }
-        });
+        getDiffMapper().registerEqualityChecker(TestClass.class, (src, target) -> false);
         TestClass rootObj1 = new TestClass(null, null);
         {
             TestClass currentObj = rootObj1;
@@ -863,6 +871,35 @@ public abstract class ObjectDiffMapperTestSuite implements
 
         assertThat(diffNode.isEmpty(), is(true));
     }
+
+    @Override
+    @Test
+    public void customGlobalMergingHandler() {
+        ObjectDiffMapper diffMapper = getDiffMapper();
+        Date src = new Date();
+        Date target = new Date(System.currentTimeMillis() + 10000L);
+        diffMapper.registerMergingHandler(Date.class, new DateMergingHandler());
+        Date result = diffMapper.applyDiff(src, new DiffNode(new Diff(Diff.Operation.UPDATE_VALUE, src.getTime(), target.getTime())));
+        assertThat(result != src, is(true));
+        assertThat(result != target, is(true));
+        assertThat(result.getTime(), is(target.getTime()));
+    }
+
+    @Override
+    @Test
+    public void customClassMergingHandler() {
+        ObjectDiffMapper diffMapper = getDiffMapper();
+        TestClassWithFieldTypeHandler src = new TestClassWithFieldTypeHandler(new Date());
+        TestClassWithFieldTypeHandler target = new TestClassWithFieldTypeHandler(new Date(System.currentTimeMillis() + 10000L));
+
+        DiffNode diffNode = new DiffNode(new Diff(),
+                Collections.singletonMap("date", new DiffNode(new Diff(Diff.Operation.UPDATE_VALUE,
+                        src.date.getTime(), target.date.getTime()))));
+
+        TestClassWithFieldTypeHandler result = diffMapper.applyDiff(src, diffNode);
+        assertThat(result.date.getTime(), is(target.date.getTime()));
+    }
+
     //endregion
 
 }

@@ -13,9 +13,17 @@ public interface ObjectDiffMapper {
 
     <T> T applyDiff(@Nullable T src, @Nonnull DiffNode diffs, @Nonnull Set<Feature.MergingStrategy> mergingStrategies);
 
-    <T> TypeHandler<T> getTypeHandler(@Nonnull Class<T> cls);
+    <T> EqualityChecker<T> getEqualityChecker(@Nonnull Class<T> cls);
 
-    <T> ObjectDiffMapper registerTypeHandler(@Nonnull Class<T> cls, @Nonnull TypeHandler<? super T> typeHandler);
+    <T> DiffingHandler<T> getDiffingHandler(@Nonnull Class<T> cls);
+
+    <T> MergingHandler<T> getMergingHandler(@Nonnull Class<T> cls);
+
+    <T> ObjectDiffMapper registerEqualityChecker(@Nonnull Class<T> cls, @Nonnull EqualityChecker<? super T> equalityChecker);
+
+    <T> ObjectDiffMapper registerDiffingHandler(@Nonnull Class<T> cls, @Nonnull DiffingHandler<? super T> diffingHandler);
+
+    <T> ObjectDiffMapper registerMergingHandler(@Nonnull Class<T> cls, @Nonnull MergingHandler<? super T> mergingHandler);
 
     ObjectDiffMapper enable(@Nonnull Feature feature);
 

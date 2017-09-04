@@ -16,7 +16,7 @@ public class Diff {
     protected Object srcValue;
     protected Object targetValue;
 
-    Diff() {
+    public Diff() {
     }
 
     public Diff(Operation operation, Object srcValue, Object targetValue) {

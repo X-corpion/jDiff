@@ -9,6 +9,7 @@ import org.xcorpion.jdiff.util.collection.Tree;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.Serializable;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -219,6 +220,40 @@ public class ReflectionUtils {
                 }
             }
             clz = clz.getSuperclass();
+        }
+        return null;
+    }
+
+    /**
+     * Look for the annotation on current class including all superclasses
+     * @param obj obj used to find the annotation on class
+     * @param annotation annotation to be looked for
+     * @param <T> annotation type
+     * @return annotation if found, otherwise null
+     */
+    @Nullable
+    public static <T extends Annotation> T getClassAnnotation(@Nullable Object obj, @Nonnull Class<T> annotation) {
+        if (obj == null) {
+            return null;
+        }
+        return getClassAnnotation(obj.getClass(), annotation);
+    }
+
+    /**
+     * Look for the annotation on current class including all superclasses
+     * @param clazz class used to find annotation on
+     * @param annotation annotation to be looked for
+     * @param <T> annotation type
+     * @return annotation if found, otherwise null
+     */
+    @Nullable
+    private static <T extends Annotation> T getClassAnnotation(@Nonnull Class<?> clazz, @Nonnull Class<T> annotation) {
+        while (clazz != null) {
+            T anno = clazz.getAnnotation(annotation);
+            if (anno != null) {
+                return anno;
+            }
+            clazz = clazz.getSuperclass();
         }
         return null;
     }

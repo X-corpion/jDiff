@@ -8,6 +8,10 @@ public class DiffNode {
     protected Diff diff;
     protected Map<Object, DiffNode> fieldDiffs;
 
+    public static DiffNode empty() {
+        return new DiffNode(new Diff(Diff.Operation.NO_OP, null, null));
+    }
+
     public DiffNode() {
         diff = new Diff();
     }
