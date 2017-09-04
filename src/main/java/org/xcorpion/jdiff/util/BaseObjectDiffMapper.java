@@ -113,20 +113,6 @@ public abstract class BaseObjectDiffMapper implements ObjectDiffMapper {
         return src.equals(target);
     }
 
-    protected String findObjectId(@Nullable Object obj) {
-        if (obj == null) {
-            return null;
-        }
-        TypeHandler<Object> typeHandler = getTypeHandler((Class<Object>) obj.getClass());
-        String id;
-        if (typeHandler != null) {
-            id = typeHandler.getObjectId(obj);
-        } else {
-            id = obj.toString();
-        }
-        return id;
-    }
-
     protected boolean isPrimitive(Object obj) {
         if (obj == null) {
             return true;

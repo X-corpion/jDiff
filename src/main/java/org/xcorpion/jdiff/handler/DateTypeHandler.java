@@ -8,12 +8,6 @@ import java.util.Date;
 
 public class DateTypeHandler implements TypeHandler<Date> {
 
-    @Nonnull
-    @Override
-    public String getTypeId() {
-        return "date";
-    }
-
     @Nullable
     @Override
     public Date merge(@Nullable Date parent, @Nonnull MergingContext mergingContext) {

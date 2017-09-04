@@ -798,12 +798,6 @@ public abstract class ObjectDiffMapperTestSuite implements
     public void diffTwoDeepObjectsThatWillFailRecursiveSolution() {
         // general equality will cause stack overflow error so we need to use the type handler feature
         getDiffMapper().registerTypeHandler(TestClass.class, new TypeHandler<TestClass>() {
-            @Nonnull
-            @Override
-            public String getTypeId() {
-                return TestClass.class.getName();
-            }
-
             @Override
             public boolean isEqualTo(@Nullable TestClass src, @Nullable TestClass target) {
                 return false;

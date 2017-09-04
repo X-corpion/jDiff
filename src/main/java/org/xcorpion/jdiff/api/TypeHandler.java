@@ -5,9 +5,6 @@ import javax.annotation.Nullable;
 
 public interface TypeHandler<T> {
 
-    @Nonnull
-    String getTypeId();
-
     default boolean isEqualTo(@Nullable T src, @Nullable T target) {
         if (src == target) {
             return true;
@@ -16,13 +13,6 @@ public interface TypeHandler<T> {
             return false;
         }
         return src.equals(target);
-    }
-
-    default String getObjectId(T obj) {
-        if (obj == null) {
-            return null;
-        }
-        return obj.toString();
     }
 
     @Nullable
