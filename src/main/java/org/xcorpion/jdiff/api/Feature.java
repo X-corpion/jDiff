@@ -2,6 +2,14 @@ package org.xcorpion.jdiff.api;
 
 public interface Feature {
 
+    interface Merging extends Feature {
+
+    }
+
+    interface Diffing extends Feature {
+
+    }
+
     default boolean allowMultiple() {
         return false;
     }
@@ -22,10 +30,10 @@ public interface Feature {
         }
     }
 
-    enum TypeHandler implements Feature {
-        IGNORE_FIELD_TYPE_HANDLER_FOR_MERGING,
-        IGNORE_CLASS_TYPE_HANDLER_FOR_MERGING,
-        IGNORE_GLOBAL_TYPE_HANDLER_FOR_MERGING
+    enum DiffingHandler implements Diffing {
+        IGNORE_FIELD_TYPE_HANDLER,
+        IGNORE_CLASS_TYPE_HANDLER,
+        IGNORE_GLOBAL_TYPE_HANDLER
         ;
 
         @Override
@@ -34,7 +42,19 @@ public interface Feature {
         }
     }
 
-    enum MergingValidationCheck implements Feature {
+    enum MergingHandler implements Merging {
+        IGNORE_FIELD_TYPE_HANDLER,
+        IGNORE_CLASS_TYPE_HANDLER,
+        IGNORE_GLOBAL_TYPE_HANDLER
+        ;
+
+        @Override
+        public boolean allowMultiple() {
+            return true;
+        }
+    }
+
+    enum MergingValidationCheck implements Merging {
         VALIDATE_SOURCE_VALUE,
         VALIDATE_OBJECT_FIELD_EXISTENCE
         ;
@@ -45,7 +65,7 @@ public interface Feature {
         }
     }
 
-    enum MergingStrategy implements Feature {
+    enum MergingStrategy implements Merging {
 
         SHALLOW_CLONE_SOURCE_ROOT,
         DEEP_CLONE_SOURCE,

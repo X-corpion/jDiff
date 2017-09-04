@@ -6,7 +6,6 @@ import org.xcorpion.jdiff.api.DiffNode;
 import org.xcorpion.jdiff.api.EqualityChecker;
 import org.xcorpion.jdiff.api.Feature;
 import org.xcorpion.jdiff.api.MergingContext;
-import org.xcorpion.jdiff.api.MergingHandler;
 import org.xcorpion.jdiff.api.ObjectDiffMapper;
 import org.xcorpion.jdiff.exception.MergingException;
 import org.xcorpion.jdiff.exception.MergingValidationError;
@@ -66,16 +65,16 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
         if (op == null) {
             throw new IllegalStateException("Unexpected operation: null");
         }
-        if (!objectDiffMapper.isEnabled(Feature.TypeHandler.IGNORE_CLASS_TYPE_HANDLER_FOR_MERGING)) {
+        if (!objectDiffMapper.isEnabled(Feature.MergingHandler.IGNORE_CLASS_TYPE_HANDLER)) {
             TypeHandler typeHandler = ReflectionUtils.getClassAnnotation(src, TypeHandler.class);
-            if (typeHandler != null) {
+            if (typeHandler != null && typeHandler.mergeUsing() != TypeHandler.None.class) {
                 this.updatedObj = mergeUsingAnnotationMergingHandler(src, diffNode, mergingContext, typeHandler);
                 return this.updatedObj;
             }
         }
-        if (!objectDiffMapper.isEnabled(Feature.TypeHandler.IGNORE_GLOBAL_TYPE_HANDLER_FOR_MERGING)) {
+        if (!objectDiffMapper.isEnabled(Feature.MergingHandler.IGNORE_GLOBAL_TYPE_HANDLER)) {
             if (src != null) {
-                MergingHandler<Object> mergingHandler = objectDiffMapper.getMergingHandler((Class<Object>) src.getClass());
+                org.xcorpion.jdiff.api.MergingHandler mergingHandler = objectDiffMapper.getMergingHandler((Class<Object>) src.getClass());
                 if (mergingHandler != null) {
                     this.updatedObj = mergeUsingCustomHandler(src, diffNode, mergingContext, mergingHandler);
                     return this.updatedObj;
@@ -212,24 +211,20 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
     private static Object mergeUsingAnnotationMergingHandler(@Nonnull Object src,
             @Nonnull DiffNode diffNode, @Nonnull MergingContext mergingContext,
             @Nonnull TypeHandler typeHandler) {
-        Class<? extends MergingHandler<?>> mergingHandlerClass = typeHandler.mergeUsing();
-        if (mergingHandlerClass != TypeHandler.None.class) {
-            MergingHandler<Object> mergingHandler;
-            try {
-                mergingHandler = (MergingHandler<Object>) mergingHandlerClass.newInstance();
-            }
-            catch (Throwable e) {
-                throw new MergingException("Failed to instantiate merging handler " + mergingHandlerClass +
-                        " for class " + src.getClass(), e);
-            }
-            return mergeUsingCustomHandler(src, diffNode, mergingContext, mergingHandler);
-        } else {
-            return cloneSrcIfNeeded(src, mergingContext);
+        Class<? extends org.xcorpion.jdiff.api.MergingHandler> mergingHandlerClass = typeHandler.mergeUsing();
+        org.xcorpion.jdiff.api.MergingHandler mergingHandler;
+        try {
+            mergingHandler = mergingHandlerClass.newInstance();
         }
+        catch (Throwable e) {
+            throw new MergingException("Failed to instantiate merging handler " + mergingHandlerClass +
+                    " for class " + src.getClass(), e);
+        }
+        return mergeUsingCustomHandler(src, diffNode, mergingContext, mergingHandler);
     }
 
     private static Object mergeUsingCustomHandler(@Nonnull Object src, @Nonnull DiffNode diffNode,
-            @Nonnull MergingContext mergingContext, @Nonnull MergingHandler<Object> mergingHandler) {
+            @Nonnull MergingContext mergingContext, @Nonnull org.xcorpion.jdiff.api.MergingHandler mergingHandler) {
         src = cloneSrcIfNeeded(src, mergingContext);
         return mergingHandler.merge(src, diffNode, mergingContext);
     }
@@ -377,9 +372,9 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
                 continue;
             }
             field.setAccessible(true);
-            if (!mergingContext.getObjectDiffMapper().isEnabled(Feature.TypeHandler.IGNORE_FIELD_TYPE_HANDLER_FOR_MERGING)) {
+            if (!mergingContext.getObjectDiffMapper().isEnabled(Feature.MergingHandler.IGNORE_FIELD_TYPE_HANDLER)) {
                 TypeHandler fieldTypeHandler = field.getAnnotation(TypeHandler.class);
-                if (fieldTypeHandler != null) {
+                if (fieldTypeHandler != null && fieldTypeHandler.mergeUsing() != TypeHandler.None.class) {
                     try {
                         Object fieldSrc = field.get(parent);
                         Object result = mergeUsingAnnotationMergingHandler(fieldSrc, entry.getValue(), mergingContext, fieldTypeHandler);

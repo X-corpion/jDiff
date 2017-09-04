@@ -7,7 +7,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +26,7 @@ import org.xcorpion.jdiff.handler.DateMergingHandler;
 import org.xcorpion.jdiff.handler.TestIterableMergingHandler;
 
 import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertThat;
 
 public abstract class ObjectDiffMapperTestSuite implements
@@ -52,6 +52,7 @@ public abstract class ObjectDiffMapperTestSuite implements
             this.field2 = field2;
         }
 
+        @SuppressWarnings("SimplifiableIfStatement")
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -483,6 +484,7 @@ public abstract class ObjectDiffMapperTestSuite implements
 
     //region Iterable test cases
 
+    @SuppressWarnings("Convert2MethodRef")
     @Override
     @Test(expected = MergingException.class)
     public void iterableMergingShouldThrowExceptionByDefault() {
@@ -491,7 +493,7 @@ public abstract class ObjectDiffMapperTestSuite implements
         TestClassWithIterable src = new TestClassWithIterable(() -> srcList.iterator());
         TestClassWithIterable target = new TestClassWithIterable(() -> targetList.iterator());
         ObjectDiffMapper diffMapper = getDiffMapper();
-        diffMapper.enable(Feature.TypeHandler.IGNORE_FIELD_TYPE_HANDLER_FOR_MERGING);
+        diffMapper.enable(Feature.MergingHandler.IGNORE_FIELD_TYPE_HANDLER);
         DiffNode diff = diffMapper.diff(src, target);
         diffMapper.applyDiff(src, diff);
     }
@@ -920,6 +922,39 @@ public abstract class ObjectDiffMapperTestSuite implements
 
     @Override
     @Test
+    public void customGlobalDiffingHandler() {
+        ObjectDiffMapper diffMapper = getDiffMapper();
+        Date src = new Date();
+        Date target = new Date(System.currentTimeMillis() + 10000L);
+
+        diffMapper.registerDiffingHandler(Date.class, new DateDiffingHandler());
+        DiffNode diff = diffMapper.diff(src, target);
+        assertThat(diff.getDiff().getOperation(), is(Diff.Operation.UPDATE_VALUE));
+        assertThat(diff.getDiff().getSrcValue(), is(src.getTime()));
+        assertThat(diff.getDiff().getTargetValue(), is(target.getTime()));
+        assertThat(diff.getFieldDiffs(), is(nullValue()));
+    }
+
+    @Override
+    @Test
+    public void customFieldDiffingHandler() {
+        ObjectDiffMapper diffMapper = getDiffMapper();
+        TestClassWithFieldTypeHandler src = new TestClassWithFieldTypeHandler(new Date());
+        TestClassWithFieldTypeHandler target = new TestClassWithFieldTypeHandler(new Date(System.currentTimeMillis() + 10000L));
+
+        diffMapper.registerDiffingHandler(Date.class, new DateDiffingHandler());
+        DiffNode diff = diffMapper.diff(src, target);
+        assertThat(diff.getDiff().getOperation(), is(Diff.Operation.NO_OP));
+
+        DiffNode dateDiffNode = diff.getFieldDiffs().get("date");
+        assertThat(dateDiffNode.getDiff().getOperation(), is(Diff.Operation.UPDATE_VALUE));
+        assertThat(dateDiffNode.getDiff().getSrcValue(), is(src.date.getTime()));
+        assertThat(dateDiffNode.getDiff().getTargetValue(), is(target.date.getTime()));
+        assertThat(dateDiffNode.getFieldDiffs(), is(nullValue()));
+    }
+
+    @Override
+    @Test
     public void customGlobalMergingHandler() {
         ObjectDiffMapper diffMapper = getDiffMapper();
         Date src = new Date();
@@ -933,7 +968,7 @@ public abstract class ObjectDiffMapperTestSuite implements
 
     @Override
     @Test
-    public void customClassMergingHandler() {
+    public void customFieldMergingHandler() {
         ObjectDiffMapper diffMapper = getDiffMapper();
         TestClassWithFieldTypeHandler src = new TestClassWithFieldTypeHandler(new Date());
         TestClassWithFieldTypeHandler target = new TestClassWithFieldTypeHandler(new Date(System.currentTimeMillis() + 10000L));

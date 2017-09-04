@@ -1,6 +1,6 @@
 package org.xcorpion.jdiff.api;
 
-public interface DiffContext {
+public interface DiffingContext {
 
     ObjectDiffMapper getObjectDiffMapper();
 

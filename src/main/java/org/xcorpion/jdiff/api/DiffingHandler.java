@@ -1,10 +1,9 @@
 package org.xcorpion.jdiff.api;
 
 import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
 
 public interface DiffingHandler<T> {
 
     @Nonnull
-    DiffNode diff(@Nullable T src, @Nullable T target, @Nonnull DiffContext diffContext);
+    DiffNode diff(@Nonnull T src, @Nonnull T target, @Nonnull DiffingContext diffingContext);
 }

@@ -1,8 +1,10 @@
 package org.xcorpion.jdiff.util;
 
+import org.xcorpion.jdiff.annotation.TypeHandler;
 import org.xcorpion.jdiff.api.*;
 import org.xcorpion.jdiff.exception.DiffException;
 import org.xcorpion.jdiff.exception.MergingException;
+import org.xcorpion.jdiff.internal.model.DefaultDiffingContext;
 import org.xcorpion.jdiff.internal.model.DefaultMergingContext;
 import org.xcorpion.jdiff.util.collection.DiffApplicationTree;
 import org.xcorpion.jdiff.util.collection.Iterables;
@@ -26,8 +28,7 @@ public class ReflectionObjectDiffMapper
         if (isEqualTo(src, target)) {
             return new DiffNode();
         }
-        final DiffNode rootDiffNode = createDiffGroupOneLevel(src, target);
-        Tree<DiffNode> diffTree = new Tree<>(rootDiffNode, generateChildDiffGroups(rootDiffNode, src, target));
+        Tree<DiffNode> diffTree = createNextDiffTreeNode(src, target);
         Iterable<DiffNode> diffGroups = diffTree.preOrderTraversal();
         Iterator<DiffNode> iter = diffGroups.iterator();
         DiffNode root = iter.next();
@@ -93,9 +94,11 @@ public class ReflectionObjectDiffMapper
             Field field = null;
             Object srcFieldValue = null;
             Object targetFieldValue = null;
+            DiffingHandler<Object> fieldDiffingHandler = null;
 
             @Override
             public boolean hasNext() {
+                fieldDiffingHandler = null;
                 for (; index < fields.size(); index++) {
                     srcFieldValue = null;
                     targetFieldValue = null;
@@ -125,6 +128,26 @@ public class ReflectionObjectDiffMapper
                         continue;
                     }
                     index++;
+                    if (isEnabled(Feature.DiffingHandler.IGNORE_FIELD_TYPE_HANDLER)) {
+                        TypeHandler typeHandler = field.getAnnotation(TypeHandler.class);
+                        if (typeHandler != null && typeHandler.diffUsing() != TypeHandler.None.class) {
+                            try {
+                                //noinspection unchecked
+                                fieldDiffingHandler = (DiffingHandler<Object>) typeHandler.diffUsing().newInstance();
+                            }
+                            catch (Throwable e) {
+                                String message = String.format("Failed to instantiate diffing handler %s for %s in %s",
+                                        typeHandler.diffUsing().getName(),
+                                        field.getName(),
+                                        diffClass.getName());
+                                throw new DiffException(message);
+                            }
+                        }
+                    }
+                    if (isEnabled(Feature.DiffingHandler.IGNORE_GLOBAL_TYPE_HANDLER)) {
+                        //noinspection unchecked
+                        fieldDiffingHandler = getDiffingHandler((Class<Object>) determineClass(srcFieldValue, targetFieldValue));
+                    }
                     return true;
                 }
                 return false;
@@ -132,10 +155,14 @@ public class ReflectionObjectDiffMapper
 
             @Override
             public Tree<DiffNode> next() {
-                DiffNode nextLevelDiffRoot = createDiffGroupOneLevel(srcFieldValue, targetFieldValue);
-                parentDiffNode.addFieldDiff(field.getName(), nextLevelDiffRoot);
-                Iterable<Tree<DiffNode>> nextLevelDiffChildren = generateChildDiffGroups(nextLevelDiffRoot, srcFieldValue, targetFieldValue);
-                return new Tree<>(nextLevelDiffRoot, nextLevelDiffChildren);
+                if (fieldDiffingHandler != null) {
+                    DiffNode diffNode = fieldDiffingHandler.diff(srcFieldValue, targetFieldValue,
+                            new DefaultDiffingContext(ReflectionObjectDiffMapper.this));
+                    return new Tree<>(diffNode);
+                }
+                Tree<DiffNode> nextDiffTreeNode = createNextDiffTreeNode(srcFieldValue, targetFieldValue);
+                parentDiffNode.addFieldDiff(field.getName(), nextDiffTreeNode.getNodeValue());
+                return nextDiffTreeNode;
             }
         };
     }
@@ -175,11 +202,9 @@ public class ReflectionObjectDiffMapper
             public Tree<DiffNode> next() {
                 int diffIndex = index - 1;
                 if (srcValue != null && targetValue != null) {
-                    DiffNode nextLevelRoot = createDiffGroupOneLevel(srcValue, targetValue);
-                    Iterable<Tree<DiffNode>> nextLevelDiffChildren =
-                            generateChildDiffGroups(nextLevelRoot, srcValue, targetValue);
-                    parentDiffNode.addFieldDiff(diffIndex, nextLevelRoot);
-                    return new Tree<>(nextLevelRoot, nextLevelDiffChildren);
+                    Tree<DiffNode> nextDiffTreeNode = createNextDiffTreeNode(srcValue, targetValue);
+                    parentDiffNode.addFieldDiff(diffIndex, nextDiffTreeNode.getNodeValue());
+                    return nextDiffTreeNode;
                 }
                 DiffNode nextLevelRoot;
                 if (diffIndex >= targetArraySize) {
@@ -243,11 +268,9 @@ public class ReflectionObjectDiffMapper
                 DiffNode nextLevelRoot;
 
                 if (srcIterHasNext && targetIterHasNext) {
-                    nextLevelRoot = createDiffGroupOneLevel(srcValue, targetValue);
-                    Iterable<Tree<DiffNode>> nextLevelDiffChildren =
-                            generateChildDiffGroups(nextLevelRoot, srcValue, targetValue);
-                    parentDiffNode.addFieldDiff(diffIndex, nextLevelRoot);
-                    return new Tree<>(nextLevelRoot, nextLevelDiffChildren);
+                    Tree<DiffNode> nextDiffTreeNode = createNextDiffTreeNode(srcValue, targetValue);
+                    parentDiffNode.addFieldDiff(diffIndex, nextDiffTreeNode.getNodeValue());
+                    return nextDiffTreeNode;
                 } else if (!targetIterHasNext) {
                     nextLevelRoot = new DiffNode(new Diff(Diff.Operation.REMOVE_VALUE, srcValue, null));
                 } else {
@@ -310,11 +333,9 @@ public class ReflectionObjectDiffMapper
                 if (isEqualTo(srcElement, targetElement)) {
                     continue;
                 }
-                DiffNode nextLevelRoot = createDiffGroupOneLevel(srcElement, targetElement);
-                Iterable<Tree<DiffNode>> nextLevelDiffChildren =
-                        generateChildDiffGroups(nextLevelRoot, srcElement, targetElement);
-                diffGroupNextLevelRootNodes.add(new Tree<>(nextLevelRoot, nextLevelDiffChildren));
-                parentDiffNode.addFieldDiff(key, nextLevelRoot);
+                Tree<DiffNode> nextLevelTreeNode = createNextDiffTreeNode(srcElement, targetElement);
+                diffGroupNextLevelRootNodes.add(nextLevelTreeNode);
+                parentDiffNode.addFieldDiff(key, nextLevelTreeNode.getNodeValue());
             } else {
                 DiffNode nextLevelRoot;
                 if (srcHasKey) {
@@ -328,6 +349,55 @@ public class ReflectionObjectDiffMapper
         }
 
         return diffGroupNextLevelRootNodes;
+    }
+
+    private Tree<DiffNode> createNextDiffTreeNode(@Nullable Object src, @Nullable Object target) {
+        DiffNode node;
+        if (src == target) {
+            node = new DiffNode(new Diff());
+        } else if (src == null || target == null) {
+            node = new DiffNode(new Diff(Diff.Operation.UPDATE_VALUE, src, target));
+        } else {
+            node = diffUsingClassLevelCustomHandler(src, target);
+        }
+        if (node != null) {
+            return new Tree<>(node);
+        }
+        node = createDiffGroupOneLevel(src, target);
+        Iterable<Tree<DiffNode>> nextLevelDiffChildren =
+                generateChildDiffGroups(node, src, target);
+        return new Tree<>(node, nextLevelDiffChildren);
+    }
+
+    @SuppressWarnings("unchecked")
+    private DiffNode diffUsingClassLevelCustomHandler(@Nonnull Object src, @Nonnull Object target) {
+        Class<Object> clazz = (Class<Object>) determineClass(src, target);
+        if (!isEnabled(Feature.DiffingHandler.IGNORE_CLASS_TYPE_HANDLER)) {
+            TypeHandler typeHandler = ReflectionUtils.getClassAnnotation(clazz, TypeHandler.class);
+            if (typeHandler != null) {
+                Class<? extends DiffingHandler<?>> handlerClass = typeHandler.diffUsing();
+                if (handlerClass != TypeHandler.None.class) {
+                    DiffingHandler<Object> diffingHandler;
+                    try {
+                        diffingHandler = (DiffingHandler<Object>) handlerClass.newInstance();
+                    }
+                    catch (Throwable e) {
+                        String message = String.format("Failed to instantiate diffing handler %s for %s",
+                                handlerClass.getName(),
+                                clazz.getName());
+                        throw new DiffException(message);
+                    }
+                    return diffingHandler.diff(src, target, new DefaultDiffingContext(this));
+                }
+            }
+        }
+        if (!isEnabled(Feature.DiffingHandler.IGNORE_GLOBAL_TYPE_HANDLER)) {
+            DiffingHandler<Object> diffingHandler = getDiffingHandler(clazz);
+            if (diffingHandler != null) {
+                return diffingHandler.diff(src, target, new DefaultDiffingContext(this));
+            }
+        }
+        return null;
     }
 
     @Override

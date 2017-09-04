@@ -247,7 +247,7 @@ public class ReflectionUtils {
      * @return annotation if found, otherwise null
      */
     @Nullable
-    private static <T extends Annotation> T getClassAnnotation(@Nonnull Class<?> clazz, @Nonnull Class<T> annotation) {
+    public static <T extends Annotation> T getClassAnnotation(@Nonnull Class<?> clazz, @Nonnull Class<T> annotation) {
         while (clazz != null) {
             T anno = clazz.getAnnotation(annotation);
             if (anno != null) {

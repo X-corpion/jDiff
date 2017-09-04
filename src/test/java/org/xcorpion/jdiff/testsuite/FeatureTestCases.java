@@ -11,9 +11,15 @@ public interface FeatureTestCases {
     void isAbleToUseHashCodeForFastEqualityCheck();
 
     @Test
+    void customGlobalDiffingHandler();
+
+    @Test
+    void customFieldDiffingHandler();
+
+    @Test
     void customGlobalMergingHandler();
 
     @Test
-    void customClassMergingHandler();
+    void customFieldMergingHandler();
 
 }
