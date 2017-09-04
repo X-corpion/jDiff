@@ -1,6 +1,10 @@
 sudo: false
 language: java
 
+cache:
+  directories:
+    - ~/.m2/repository
+
 script:
   - mvn test jacoco:report
 
