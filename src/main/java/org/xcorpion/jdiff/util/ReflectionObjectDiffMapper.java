@@ -73,9 +73,6 @@ public class ReflectionObjectDiffMapper
             ));
         }
 
-        if (!diffClass.equals(target.getClass())) {
-            throw new DiffException("Cannot diff two objects with different types: not supported");
-        }
         if (diffClass.isArray()) {
             return createArrayDiffIterable(parentDiffNode, src, target);
         }

@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -485,18 +486,24 @@ public abstract class ObjectDiffMapperTestSuite implements
     @Override
     @Test(expected = MergingException.class)
     public void iterableMergingShouldThrowExceptionByDefault() {
-        TestClassWithIterable src = new TestClassWithIterable(Arrays.asList("1", "2"));
-        TestClassWithIterable target = new TestClassWithIterable(Arrays.asList("1", "3", "4"));
+        List<String> srcList = Arrays.asList("1", "2");
+        List<String> targetList = Arrays.asList("1", "3", "4");
+        TestClassWithIterable src = new TestClassWithIterable(() -> srcList.iterator());
+        TestClassWithIterable target = new TestClassWithIterable(() -> targetList.iterator());
         ObjectDiffMapper diffMapper = getDiffMapper();
         diffMapper.enable(Feature.TypeHandler.IGNORE_FIELD_TYPE_HANDLER_FOR_MERGING);
         DiffNode diff = diffMapper.diff(src, target);
         diffMapper.applyDiff(src, diff);
     }
 
+    @SuppressWarnings("Convert2MethodRef")
     @Override
+    @Test
     public void iterableMergingCanBeDoneWithCustomMerger() {
-        TestClassWithIterable src = new TestClassWithIterable(Arrays.asList("1", "2"));
-        TestClassWithIterable target = new TestClassWithIterable(Arrays.asList("1", "3", "4"));
+        List<String> srcList = Arrays.asList("1", "2");
+        List<String> targetList = Arrays.asList("1", "3", "4");
+        TestClassWithIterable src = new TestClassWithIterable(() -> srcList.iterator());
+        TestClassWithIterable target = new TestClassWithIterable(() -> targetList.iterator());
         ObjectDiffMapper diffMapper = getDiffMapper();
         DiffNode diff = diffMapper.diff(src, target);
         TestClassWithIterable result = diffMapper.applyDiff(src, diff);

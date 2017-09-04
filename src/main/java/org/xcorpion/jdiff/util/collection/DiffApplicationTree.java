@@ -368,34 +368,35 @@ public class DiffApplicationTree implements TreeLike<DiffApplicationTree> {
         for (Map.Entry<Object, DiffNode> entry : diffNode.getFieldDiffs().entrySet()) {
             String fieldName = (String) entry.getKey();
             Diff diff = entry.getValue().getDiff();
+            Field field = ReflectionUtils.getField(parent, fieldName);
+            ObjectDiffMapper objectDiffMapper = mergingContext.getObjectDiffMapper();
+            if (field == null) {
+                if (objectDiffMapper.isEnabled(Feature.MergingValidationCheck.VALIDATE_OBJECT_FIELD_EXISTENCE)) {
+                    throw new MergingException("Unable to find " + fieldName + " in " + parent.getClass().getName());
+                }
+                continue;
+            }
+            field.setAccessible(true);
+            if (!mergingContext.getObjectDiffMapper().isEnabled(Feature.TypeHandler.IGNORE_FIELD_TYPE_HANDLER_FOR_MERGING)) {
+                TypeHandler fieldTypeHandler = field.getAnnotation(TypeHandler.class);
+                if (fieldTypeHandler != null) {
+                    try {
+                        Object fieldSrc = field.get(parent);
+                        Object result = mergeUsingAnnotationMergingHandler(fieldSrc, entry.getValue(), mergingContext, fieldTypeHandler);
+                        field.set(parent, result);
+                    } catch (IllegalAccessException e) {
+                        throw new MergingException("Failed to access field " + fieldName + " in " + parent.getClass().getName(), e);
+                    }
+                    removedFieldDiffKeys.add(fieldName);
+                    continue;
+                }
+            }
             switch (diff.getOperation()) {
                 case NO_OP:
                     break;
                 case UPDATE_VALUE:
-                    Field field = ReflectionUtils.getField(parent, fieldName);
-                    if (field == null) {
-                        throw new MergingException("Unable to find " + fieldName + " in " + parent.getClass().getName());
-                    }
                     field.setAccessible(true);
-                    Object fieldSrc;
-                    try {
-                        fieldSrc = field.get(parent);
-                    } catch (IllegalAccessException e) {
-                        throw new MergingException("Failed to get " + fieldName + " in " + parent.getClass().getName(), e);
-                    }
-                    Object fieldTarget = null;
-                    boolean useCustomHandler = false;
-                    if (!mergingContext.getObjectDiffMapper().isEnabled(Feature.TypeHandler.IGNORE_FIELD_TYPE_HANDLER_FOR_MERGING)) {
-                        TypeHandler fieldTypeHandler = field.getAnnotation(TypeHandler.class);
-                        if (fieldTypeHandler != null) {
-                            fieldTarget = mergeUsingAnnotationMergingHandler(fieldSrc, entry.getValue(), mergingContext, fieldTypeHandler);
-                            removedFieldDiffKeys.add(fieldName);
-                            useCustomHandler = true;
-                        }
-                    }
-                    if (!useCustomHandler) {
-                        fieldTarget = diff.getTargetValue();
-                    }
+                    Object fieldTarget = diff.getTargetValue();
                     try {
                         field.set(parent, fieldTarget);
                     } catch (IllegalAccessException e) {

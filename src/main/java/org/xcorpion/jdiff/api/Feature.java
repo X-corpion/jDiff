@@ -35,7 +35,8 @@ public interface Feature {
     }
 
     enum MergingValidationCheck implements Feature {
-        VALIDATE_SOURCE_VALUE
+        VALIDATE_SOURCE_VALUE,
+        VALIDATE_OBJECT_FIELD_EXISTENCE
         ;
 
         @Override
