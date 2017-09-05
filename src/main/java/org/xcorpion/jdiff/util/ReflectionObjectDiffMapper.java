@@ -128,7 +128,7 @@ public class ReflectionObjectDiffMapper
                         continue;
                     }
                     index++;
-                    if (isEnabled(Feature.DiffingHandler.IGNORE_FIELD_TYPE_HANDLER)) {
+                    if (!isEnabled(Feature.DiffingHandler.IGNORE_FIELD_TYPE_HANDLER)) {
                         TypeHandler typeHandler = field.getAnnotation(TypeHandler.class);
                         if (typeHandler != null && typeHandler.diffUsing() != TypeHandler.None.class) {
                             try {
@@ -144,7 +144,7 @@ public class ReflectionObjectDiffMapper
                             }
                         }
                     }
-                    if (isEnabled(Feature.DiffingHandler.IGNORE_GLOBAL_TYPE_HANDLER)) {
+                    if (!isEnabled(Feature.DiffingHandler.IGNORE_GLOBAL_TYPE_HANDLER)) {
                         //noinspection unchecked
                         fieldDiffingHandler = getDiffingHandler((Class<Object>) determineClass(srcFieldValue, targetFieldValue));
                     }
@@ -155,12 +155,14 @@ public class ReflectionObjectDiffMapper
 
             @Override
             public Tree<DiffNode> next() {
+                Tree<DiffNode> nextDiffTreeNode;
                 if (fieldDiffingHandler != null) {
                     DiffNode diffNode = fieldDiffingHandler.diff(srcFieldValue, targetFieldValue,
                             new DefaultDiffingContext(ReflectionObjectDiffMapper.this));
-                    return new Tree<>(diffNode);
+                    nextDiffTreeNode = new Tree<>(diffNode);
+                } else {
+                    nextDiffTreeNode = createNextDiffTreeNode(srcFieldValue, targetFieldValue);
                 }
-                Tree<DiffNode> nextDiffTreeNode = createNextDiffTreeNode(srcFieldValue, targetFieldValue);
                 parentDiffNode.addFieldDiff(field.getName(), nextDiffTreeNode.getNodeValue());
                 return nextDiffTreeNode;
             }

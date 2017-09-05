@@ -14,12 +14,17 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
+import javax.annotation.Nonnull;
+
 import org.junit.Test;
 import org.xcorpion.jdiff.annotation.TypeHandler;
 import org.xcorpion.jdiff.api.Diff;
 import org.xcorpion.jdiff.api.DiffNode;
+import org.xcorpion.jdiff.api.DiffingContext;
+import org.xcorpion.jdiff.api.DiffingHandler;
 import org.xcorpion.jdiff.api.Feature;
 import org.xcorpion.jdiff.api.ObjectDiffMapper;
+import org.xcorpion.jdiff.exception.DiffException;
 import org.xcorpion.jdiff.exception.MergingException;
 import org.xcorpion.jdiff.handler.DateDiffingHandler;
 import org.xcorpion.jdiff.handler.DateMergingHandler;
@@ -28,6 +33,7 @@ import org.xcorpion.jdiff.handler.TestIterableMergingHandler;
 import static org.hamcrest.Matchers.*;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 public abstract class ObjectDiffMapperTestSuite implements
         PrimitiveTestCases,
@@ -123,6 +129,31 @@ public abstract class ObjectDiffMapperTestSuite implements
         Date date;
 
         TestClassWithFieldTypeHandler(Date date) {
+            this.date = date;
+        }
+    }
+
+    private static class DateDiffingHandlerNoDefaultCtor implements DiffingHandler<Date> {
+
+        @SuppressWarnings("unused")
+        public DateDiffingHandlerNoDefaultCtor(String str) {
+        }
+
+        @Nonnull
+        @Override
+        public DiffNode diff(@Nonnull Date src, @Nonnull Date target, @Nonnull DiffingContext diffingContext) {
+            return DiffNode.empty();
+        }
+    }
+
+    private static class TestClassWithBrokenFieldTypeHandler {
+
+        @TypeHandler(
+                diffUsing = DateDiffingHandlerNoDefaultCtor.class
+        )
+        Date date;
+
+        TestClassWithBrokenFieldTypeHandler(Date date) {
             this.date = date;
         }
     }
@@ -981,6 +1012,23 @@ public abstract class ObjectDiffMapperTestSuite implements
         assertThat(result.date.getTime(), is(target.date.getTime()));
     }
 
+    //endregion
+
+    //region Exception test cases
+    @Override
+    @Test
+    public void diffingHandlerMustHaveDefaultConstructor() {
+        ObjectDiffMapper diffMapper = getDiffMapper();
+        TestClassWithBrokenFieldTypeHandler src = new TestClassWithBrokenFieldTypeHandler(new Date());
+        TestClassWithBrokenFieldTypeHandler target = new TestClassWithBrokenFieldTypeHandler(new Date(1000));
+
+        try {
+            diffMapper.diff(src, target);
+            fail("should throw exception");
+        } catch (DiffException e) {
+            assertThat(e.getMessage(), containsString("diffing handler"));
+        }
+    }
     //endregion
 
 }
