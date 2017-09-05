@@ -51,6 +51,13 @@
     </dependencies>
 
     <build>
+        <extensions>
+            <extension>
+                <groupId>io.packagecloud.maven.wagon</groupId>
+                <artifactId>maven-packagecloud-wagon</artifactId>
+                <version>0.0.6</version>
+            </extension>
+        </extensions>
         <plugins>
             <plugin>
                 <groupId>org.jacoco</groupId>
@@ -93,5 +100,20 @@
             </plugin>
         </plugins>
     </build>
+
+    <distributionManagement>
+        <repository>
+            <id>packagecloud-travis</id>
+            <url>
+                packagecloud+https://packagecloud.io/xcorpion/jDiff
+            </url>
+        </repository>
+        <snapshotRepository>
+            <id>packagecloud-travis</id>
+            <url>
+                packagecloud+https://packagecloud.io/xcorpion/jDiff
+            </url>
+        </snapshotRepository>
+    </distributionManagement>
 
 </project>
