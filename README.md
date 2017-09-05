@@ -15,8 +15,8 @@ TODO items:
 # Features
 - Support arbitrary object diffing and merging
 
-  - "Native" diffing support for array, collection (Iterable, Set, Map) and general objects
-  - "Native" merging support for array, collection (List, Set, Map) and general objects
+  - "Native" diffing support for array, collection (`Iterable`, `Set`, `Map`) and general objects
+  - "Native" merging support for array, collection (`List`, `Set`, `Map`) and general objects
   - Pluggable interface to allow for extensible diffing/merging support (e.g. unmodifiable collections)
   
 - Support abitrary size object diffing/merging as long as the object fits into memory using Iterative approach
