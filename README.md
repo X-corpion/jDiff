@@ -13,63 +13,63 @@ But it should be able to handle non-critical production use cases with the curre
 
 1. Add this to maven
 
-```xml
-<dependency>
-    <groupId>org.xcorpion</groupId>
-    <artifactId>jDiff</artifactId>
-    <version>0.1.0</version>
-</dependency>
-```
+    ```xml
+    <dependency>
+        <groupId>org.xcorpion</groupId>
+        <artifactId>jDiff</artifactId>
+        <version>0.1.0</version>
+    </dependency>
+    ```
 
 2. Create the object diff mapper
 
-Currently the reflection mapper is the only implementation.
+    Currently the reflection mapper is the only implementation.
 
-```java
-ObjectDiffMapper mapper = new ReflectionObjectDiffMapper();
-```
+    ```java
+    ObjectDiffMapper mapper = new ReflectionObjectDiffMapper();
+    ```
 
 3. Diff/Merge objects
 
-```java
-public class MyClass {
+    ```java
+    public class MyClass {
 
-    private String str;
-    private List<Integer> list;
+        private String str;
+        private List<Integer> list;
 
-    public MyClass(String str, List<Integer> list) {
-        this.str = str;
-        this.list = list;
+        public MyClass(String str, List<Integer> list) {
+            this.str = str;
+            this.list = list;
+        }
+
+        public String getStr() {
+            return str;
+        }
+
+        public List<Integer> getList() {
+            return list;
+        }
     }
-    
-    public String getStr() {
-        return str;
-    }
-    
-    public List<Integer> getList() {
-        return list;
-    }
-}
 
 
-MyClass obj1 = new MyClass("foo", Arrays.asList(1, 2));
-MyClass obj2 = new MyClass("bar", Arrays.asList(2));
+    MyClass obj1 = new MyClass("foo", Arrays.asList(1, 2));
+    MyClass obj2 = new MyClass("bar", Arrays.asList(2));
 
-DiffNode diff = mapper.diff(obj1, obj2);
+    DiffNode diff = mapper.diff(obj1, obj2);
 
-// apply diff in place
-MyClass newObj = mapper.applyDiff(obj1, diff);
+    // apply diff in place
+    MyClass newObj = mapper.applyDiff(obj1, diff);
 
-assert newObj == obj1;
-assert "bar".equals(newObj.getStr());
-assert Arrays.asList(1, 2).equals(newObj.getList());
+    assert newObj == obj1;
+    assert "bar".equals(newObj.getStr());
+    assert Arrays.asList(1, 2).equals(newObj.getList());
 
-obj1 = new MyClass("foo", Arrays.asList(1, 2));
-// apply diff into a new object
-newObj = mapper.applyDiff(obj1, diff, Collections.singleton(Feature.MergingStrategy.DEEP_CLONE_SOURCE));
+    obj1 = new MyClass("foo", Arrays.asList(1, 2));
+    // apply diff into a new object
+    newObj = mapper.applyDiff(obj1, diff, Collections.singleton(Feature.MergingStrategy.DEEP_CLONE_SOURCE));
 
-assert newObj != obj1;
-```
+    assert newObj != obj1;
+    ```
 
 # Advanced Usage
 
