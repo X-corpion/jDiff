@@ -74,14 +74,14 @@ assert newObj != obj1;
 
 # Advanced Usage
 
-1. Ignore transient fields:
+## Ignore transient fields
 
 ```java
 ObjectDiffMapper mapper = new ReflectionObjectDiffMapper()
         .enable(Feature.IgnoreFields.TRANSIENT);
 ```
 
-2. Custom Merging/Diffing Handler
+## Custom Merging/Diffing Handler
 
 ```java
 /*
