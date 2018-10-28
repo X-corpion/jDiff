@@ -29,6 +29,8 @@ import org.xcorpion.jdiff.exception.MergingException;
 import org.xcorpion.jdiff.handler.DateDiffingHandler;
 import org.xcorpion.jdiff.handler.DateMergingHandler;
 import org.xcorpion.jdiff.handler.TestIterableMergingHandler;
+import org.xcorpion.jdiff.testsuite.handlers.StringListToStringDiffingHandler;
+import org.xcorpion.jdiff.testsuite.handlers.StringToStringListMergingHandler;
 
 import static org.hamcrest.Matchers.*;
 import static org.hamcrest.Matchers.nullValue;
@@ -48,6 +50,7 @@ public abstract class ObjectDiffMapperTestSuite implements
         FeatureTestCases
 {
 
+    @SuppressWarnings("unchecked")
     private static class TestClass implements Serializable {
 
         Object field1;
@@ -56,6 +59,14 @@ public abstract class ObjectDiffMapperTestSuite implements
         TestClass(Object field1, Object field2) {
             this.field1 = field1;
             this.field2 = field2;
+        }
+
+        public <T> T getField1() {
+            return (T) field1;
+        }
+
+        public <T> T getField2() {
+            return (T) field2;
         }
 
         @SuppressWarnings("SimplifiableIfStatement")
@@ -130,6 +141,15 @@ public abstract class ObjectDiffMapperTestSuite implements
 
         TestClassWithFieldTypeHandler(Date date) {
             this.date = date;
+        }
+    }
+
+    private static class TestClassWithGenericsField {
+
+        List<String> list;
+
+        public TestClassWithGenericsField(List<String> list) {
+            this.list = list;
         }
     }
 
@@ -968,12 +988,11 @@ public abstract class ObjectDiffMapperTestSuite implements
 
     @Override
     @Test
-    public void customFieldDiffingHandler() {
+    public void customFieldDiffingHandlerUsingAnnotation() {
         ObjectDiffMapper diffMapper = getDiffMapper();
         TestClassWithFieldTypeHandler src = new TestClassWithFieldTypeHandler(new Date());
         TestClassWithFieldTypeHandler target = new TestClassWithFieldTypeHandler(new Date(System.currentTimeMillis() + 10000L));
 
-        diffMapper.registerDiffingHandler(Date.class, new DateDiffingHandler());
         DiffNode diff = diffMapper.diff(src, target);
         assertThat(diff.getDiff().getOperation(), is(Diff.Operation.NO_OP));
 
@@ -982,6 +1001,41 @@ public abstract class ObjectDiffMapperTestSuite implements
         assertThat(dateDiffNode.getDiff().getSrcValue(), is(src.date.getTime()));
         assertThat(dateDiffNode.getDiff().getTargetValue(), is(target.date.getTime()));
         assertThat(dateDiffNode.getFieldDiffs(), is(nullValue()));
+    }
+
+    @Override
+    @Test
+    public void customFieldDiffingHandlerUsingRegisterCall() {
+        ObjectDiffMapper diffMapper = getDiffMapper();
+        TestClass src = new TestClass(new Date(), null);
+        TestClass target = new TestClass(new Date(System.currentTimeMillis() + 10000L), null);
+
+        diffMapper.registerDiffingHandler(Date.class, new DateDiffingHandler());
+        DiffNode diff = diffMapper.diff(src, target);
+        assertThat(diff.getDiff().getOperation(), is(Diff.Operation.NO_OP));
+
+        DiffNode dateDiffNode = diff.getFieldDiffs().get("field1");
+        assertThat(dateDiffNode.getDiff().getOperation(), is(Diff.Operation.UPDATE_VALUE));
+        assertThat(dateDiffNode.getDiff().getSrcValue(), is(src.<Date>getField1().getTime()));
+        assertThat(dateDiffNode.getDiff().getTargetValue(), is(target.<Date>getField1().getTime()));
+        assertThat(dateDiffNode.getFieldDiffs(), is(nullValue()));
+    }
+
+    @Override
+    @Test
+    public void customDiffingHandlerCanHandleGenerics() {
+        ObjectDiffMapper diffMapper = getDiffMapper();
+        TestClassWithGenericsField src = new TestClassWithGenericsField(Arrays.asList("a", "b"));
+        TestClassWithGenericsField target = new TestClassWithGenericsField(Arrays.asList("b", "b", "c"));
+
+        diffMapper.registerDiffingHandler(new StringListToStringDiffingHandler());
+
+        DiffNode rootNode = diffMapper.diff(src, target);
+        DiffNode diffNode = rootNode.getFieldDiffs().get("list");
+        assertThat(diffNode.getDiff().getOperation(), is(Diff.Operation.UPDATE_VALUE));
+        assertThat(diffNode.getDiff().getSrcValue(), is("a|b"));
+        assertThat(diffNode.getDiff().getTargetValue(), is("b|b|c"));
+        assertThat(diffNode.getFieldDiffs(), is(nullValue()));
     }
 
     @Override
@@ -995,6 +1049,25 @@ public abstract class ObjectDiffMapperTestSuite implements
         assertThat(result != src, is(true));
         assertThat(result != target, is(true));
         assertThat(result.getTime(), is(target.getTime()));
+    }
+
+    @Override
+    @Test
+    public void customMergingHandlerCanHandleGenerics() {
+        Map<Object, DiffNode> fieldDiffs = new HashMap<>();
+        fieldDiffs.put("list", new DiffNode(
+                new Diff(
+                        Diff.Operation.UPDATE_VALUE,
+                        "a|b",
+                        "b|b|c"
+                )
+        ));
+        DiffNode rootNode = new DiffNode(new Diff(), fieldDiffs);
+        ObjectDiffMapper diffMapper = getDiffMapper();
+        diffMapper.registerMergingHandler(new StringToStringListMergingHandler());
+        TestClassWithGenericsField src = new TestClassWithGenericsField(Arrays.asList("a", "b"));
+        TestClassWithGenericsField result = diffMapper.applyDiff(src, rootNode);
+        assertThat(result.list, is(Arrays.asList("b", "b", "c")));
     }
 
     @Override

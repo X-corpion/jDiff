@@ -6,6 +6,8 @@ import org.xcorpion.jdiff.exception.DiffException;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.lang.reflect.Array;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.*;
 
 @SuppressWarnings("unchecked, WeakerAccess")
@@ -19,9 +21,9 @@ public abstract class BaseObjectDiffMapper implements ObjectDiffMapper {
     };
 
     private Map<Class<? extends Feature>, List<Feature>> features = new HashMap<>();
-    private Map<Class<?>, EqualityChecker<?>> equalityCheckers = new HashMap<>();
-    private Map<Class<?>, DiffingHandler<?>> diffingHandlers = new HashMap<>();
-    private Map<Class<?>, MergingHandler<?>> mergingHandlers = new HashMap<>();
+    private Map<Type, EqualityChecker<?>> equalityCheckers = new HashMap<>();
+    private Map<Type, DiffingHandler<?>> diffingHandlers = new HashMap<>();
+    private Map<Type, MergingHandler<?>> mergingHandlers = new HashMap<>();
     private static final Set<Class<?>> PRIMITIVE_TYPES = new HashSet<>();
 
     static {
@@ -66,8 +68,18 @@ public abstract class BaseObjectDiffMapper implements ObjectDiffMapper {
     }
 
     @Override
+    public <T> DiffingHandler<T> getDiffingHandler(@Nonnull Type type) {
+        return (DiffingHandler<T>) diffingHandlers.get(type);
+    }
+
+    @Override
     public <T> MergingHandler<T> getMergingHandler(@Nonnull Class<T> cls) {
         return (MergingHandler<T>) mergingHandlers.get(cls);
+    }
+
+    @Override
+    public <T> MergingHandler<T> getMergingHandler(@Nonnull Type type) {
+        return (MergingHandler<T>) mergingHandlers.get(type);
     }
 
     @Override
@@ -76,15 +88,39 @@ public abstract class BaseObjectDiffMapper implements ObjectDiffMapper {
         return this;
     }
 
+    protected void registerHandler(@Nonnull Type type, @Nonnull DiffingHandler<?> diffingHandler) {
+        diffingHandlers.put(type, diffingHandler);
+    }
+
+    protected void registerHandler(@Nonnull Type type, @Nonnull MergingHandler<?> mergingHandler) {
+        mergingHandlers.put(type, mergingHandler);
+    }
+
     @Override
     public <T> ObjectDiffMapper registerDiffingHandler(@Nonnull Class<T> cls, @Nonnull DiffingHandler<? super T> diffingHandler) {
-        diffingHandlers.put(cls, diffingHandler);
+        this.registerHandler(cls, diffingHandler);
+        return this;
+    }
+
+    @Override
+    public ObjectDiffMapper registerDiffingHandler(@Nonnull AbstractDiffingHandler<?> diffingHandler) {
+        Type superclassType = diffingHandler.getClass().getGenericSuperclass();
+        Type targetFieldType = ((ParameterizedType) superclassType).getActualTypeArguments()[0];
+        this.registerHandler(targetFieldType, diffingHandler);
         return this;
     }
 
     @Override
     public <T> ObjectDiffMapper registerMergingHandler(@Nonnull Class<T> cls, @Nonnull MergingHandler<? super T> mergingHandler) {
-        mergingHandlers.put(cls, mergingHandler);
+        this.registerHandler(cls, mergingHandler);
+        return this;
+    }
+
+    @Override
+    public ObjectDiffMapper registerMergingHandler(@Nonnull AbstractMergingHandler<?> mergingHandler) {
+        Type superclassType = mergingHandler.getClass().getGenericSuperclass();
+        Type targetFieldType = ((ParameterizedType) superclassType).getActualTypeArguments()[0];
+        this.registerHandler(targetFieldType, mergingHandler);
         return this;
     }
 
@@ -112,13 +148,6 @@ public abstract class BaseObjectDiffMapper implements ObjectDiffMapper {
         return values != null && values.contains(feature);
     }
 
-    Class<?> determineClass(@Nullable Object src, @Nullable Object target) {
-        if (src == null && target == null) {
-            throw new IllegalStateException("src and target cannot both be null");
-        }
-        return src != null ? src.getClass() : target.getClass();
-    }
-
     boolean isEqualTo(@Nullable Object src, @Nullable Object target) {
         if (src == target) {
             return true;
@@ -126,7 +155,7 @@ public abstract class BaseObjectDiffMapper implements ObjectDiffMapper {
         if (src == null || target == null) {
             return false;
         }
-        Class<?> type = determineClass(src, target);
+        Class<?> type = ObjectUtils.inferClass(src, target);
         EqualityChecker<Object> typeHandler = (EqualityChecker<Object>) getEqualityChecker(type);
         if (typeHandler != null) {
             return typeHandler.isEqualTo(src, target);

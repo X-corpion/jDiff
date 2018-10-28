@@ -86,7 +86,7 @@ ObjectDiffMapper mapper = new ReflectionObjectDiffMapper()
 /*
  * This example shows how to serialize dates into millis for diffing instead of field by field reflection
  */
-public class DateDiffingHandler implements DiffingHandler<Date> {
+public class DateDiffingHandler extends AbstractDiffingHandler<Date> {
 
     @Nonnull
     @Override
@@ -106,7 +106,7 @@ public class DateDiffingHandler implements DiffingHandler<Date> {
 
 }
 
-public class DateMergingHandler implements MergingHandler<Date> {
+public class DateMergingHandler extends AbstractMergingHandler<Date> {
 
     @Nullable
     @Override
@@ -142,6 +142,41 @@ public class DateMergingHandler implements MergingHandler<Date> {
 ObjectDiffMapper mapper = new ReflectionObjectDiffMapper();
 diffMapper.registerDiffingHandler(Date.class, new DateDiffingHandler());
 diffMapper.registerMergingHandler(Date.class, new DateMergingHandler());
+
+// alternatively you can also just annotate your field like:
+class YourClass {
+    @TypeHandler(
+            diffUsing = DateDiffingHandler.class,
+            mergeUsing = DateMergingHandler.class
+    )
+    Date date;
+}
+```
+
+### Generic Field Support
+
+```java
+public class StringListToStringDiffingHandler extends AbstractDiffingHandler<List<String>> {
+    @Nonnull
+    @Override
+    public DiffNode diff(@Nonnull List<String> src, @Nonnull List<String> target, @Nonnull DiffingContext diffingContext) {
+        if (src.equals(target)) {
+            return new DiffNode();
+        }
+        Diff diff = new Diff(Diff.Operation.UPDATE_VALUE, String.join("|", src), String.join("|", target));
+        return new DiffNode(diff);
+    }
+}
+
+ObjectDiffMapper mapper = new ReflectionObjectDiffMapper();
+diffMapper.registerMergingHandler(new StringToStringListMergingHandler());
+// alternatively you can also just annotate your field like:
+class YourClass {
+    @TypeHandler(
+            diffUsing = StringListToStringDiffingHandler.class
+    )
+    List<String> stringList;
+}
 ```
 
 # Features

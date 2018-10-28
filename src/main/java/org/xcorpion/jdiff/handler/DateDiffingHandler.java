@@ -1,15 +1,14 @@
 package org.xcorpion.jdiff.handler;
 
-
 import javax.annotation.Nonnull;
 import java.util.Date;
 
+import org.xcorpion.jdiff.api.AbstractDiffingHandler;
 import org.xcorpion.jdiff.api.Diff;
 import org.xcorpion.jdiff.api.DiffingContext;
 import org.xcorpion.jdiff.api.DiffNode;
-import org.xcorpion.jdiff.api.DiffingHandler;
 
-public class DateDiffingHandler implements DiffingHandler<Date> {
+public class DateDiffingHandler extends AbstractDiffingHandler<Date> {
 
     @Nonnull
     @Override

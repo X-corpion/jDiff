@@ -160,6 +160,4 @@ public class ReflectionUtilsTest {
         assertThat(anno, is(notNullValue()));
     }
 
-
-
 }

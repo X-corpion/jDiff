@@ -4,15 +4,14 @@ import org.apache.commons.lang3.SerializationUtils;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.xcorpion.jdiff.exception.CloneException;
+import org.xcorpion.jdiff.util.ObjectUtils;
 import org.xcorpion.jdiff.util.collection.Tree;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import java.io.Serializable;
 import java.lang.annotation.Annotation;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
+import java.lang.reflect.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -256,6 +255,23 @@ public class ReflectionUtils {
             clazz = clazz.getSuperclass();
         }
         return null;
+    }
+
+    public static Type guessType(@Nonnull Field field, @Nullable Object srcValue, @Nullable Object targetValue) {
+        Type fieldType = field.getGenericType();
+        if (!Object.class.equals(fieldType)) {
+            // declared at code level
+            return fieldType;
+        }
+        // can only infer class info due to type erasure
+        return ObjectUtils.inferClass(srcValue, targetValue);
+    }
+
+    public static Class<?> typeToClass(Type type) {
+        if (type instanceof ParameterizedType) {
+            return (Class<?>) ((ParameterizedType) type).getRawType();
+        }
+        return (Class<?>) type;
     }
 
     private static String getClassName(Object instance) {

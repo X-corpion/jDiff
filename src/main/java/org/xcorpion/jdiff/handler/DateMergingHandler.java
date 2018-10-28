@@ -5,13 +5,13 @@ import java.util.Date;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 
+import org.xcorpion.jdiff.api.AbstractMergingHandler;
 import org.xcorpion.jdiff.api.Diff;
 import org.xcorpion.jdiff.api.DiffNode;
 import org.xcorpion.jdiff.api.MergingContext;
-import org.xcorpion.jdiff.api.MergingHandler;
 import org.xcorpion.jdiff.exception.MergingException;
 
-public class DateMergingHandler implements MergingHandler<Date> {
+public class DateMergingHandler extends AbstractMergingHandler<Date> {
 
     @Nullable
     @Override

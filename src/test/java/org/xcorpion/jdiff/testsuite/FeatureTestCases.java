@@ -14,10 +14,19 @@ public interface FeatureTestCases {
     void customGlobalDiffingHandler();
 
     @Test
-    void customFieldDiffingHandler();
+    void customFieldDiffingHandlerUsingAnnotation();
+
+    @Test
+    void customFieldDiffingHandlerUsingRegisterCall();
+
+    @Test
+    void customDiffingHandlerCanHandleGenerics();
 
     @Test
     void customGlobalMergingHandler();
+
+    @Test
+    void customMergingHandlerCanHandleGenerics();
 
     @Test
     void customFieldMergingHandler();
