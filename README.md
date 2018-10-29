@@ -5,7 +5,7 @@ Java object diffing and merging made easy.
 # Build Status
 [![Build Status](https://travis-ci.org/X-corpion/jDiff.svg?branch=master)](https://travis-ci.org/X-corpion/jDiff)
 [![Coverage Status](https://coveralls.io/repos/github/X-corpion/jDiff/badge.svg?branch=master)](https://coveralls.io/github/X-corpion/jDiff?branch=master)
-[![Maven Version](https://img.shields.io/maven-central/v/org.xcorpion/jDiff.svg)]
+[![Maven Version](https://img.shields.io/maven-central/v/org.xcorpion/jDiff.svg)](https://mvnrepository.com/artifact/org.xcorpion/jDiff)
 
 # Project Status
 **This project is still under development so the APIs and underlying implementations are subject to change.**
