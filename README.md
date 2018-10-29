@@ -211,3 +211,19 @@ class YourClass {
   You can build an ETL type of system:
   
   build diffs on one set of boxes, seralize them in db, and selectively merge them on other boxes based on certain criteria
+  
+# Contribution
+
+## Release Handling
+
+```shell
+$ mvn gitflow:release-start
+$ git push origin HEAD
+```
+
+Travis will pick up the release branch, release artifacts to Sonatype OSSRH, merge and tag the release.
+
+If that failed, a manual local merge can be done (in release branch):
+```shell
+$ mvn gitflow:release-finish
+```
