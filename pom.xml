@@ -127,6 +127,7 @@
                 <configuration>
                     <gitFlowConfig>
                         <developmentBranch>master</developmentBranch>
+                        <versionTagPrefix>v</versionTagPrefix>
                     </gitFlowConfig>
                 </configuration>
             </plugin>
